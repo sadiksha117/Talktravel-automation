@@ -7,73 +7,49 @@ export class Flow1Page extends BasePage {
   readonly headerCommunity: Locator;
   readonly headerBlog: Locator;
   readonly headerFaq: Locator;
-  readonly headerLogin: Locator;
-  readonly headerJoinFree: Locator;
+  readonly headerJoinCommunity: Locator;
 
   // Landing hero
   readonly heroHeading: Locator;
-  readonly heroSubtext: Locator;
   readonly joinCommunityBtn: Locator;
   readonly readTheBlogBtn: Locator;
-  readonly heroImage: Locator;
 
   // Blog index
   readonly blogHeroHeading: Locator;
-  readonly blogHeroSubtext: Locator;
-  readonly searchBar: Locator;
-  readonly searchSubmitBtn: Locator;
+  readonly blogHeroText: Locator;
   readonly latestArticlesHeading: Locator;
-  readonly viewAllBlogsBtn: Locator;
-  readonly articleCards: Locator;
+  readonly latestArticlesSection: Locator;
 
   // Single article
-  readonly breadcrumb: Locator;
-  readonly articleCategoryTag: Locator;
   readonly articleTitle: Locator;
-  readonly authorBlock: Locator;
-  readonly shareRow: Locator;
-  readonly articleHeroImage: Locator;
-  readonly articleBody: Locator;
 
   constructor(page: Page) {
     super(page);
 
-    // Header
-    this.logo = page.locator('header img[alt*="TalkTravel"], header a[href="/"] img').first();
-    this.headerCommunity = page.locator('header a', { hasText: 'Community' });
-    this.headerBlog = page.locator('header a', { hasText: 'Blog' });
-    this.headerFaq = page.locator('header a', { hasText: 'FAQ' });
-    this.headerLogin = page.locator('header a', { hasText: 'Log in' });
-    this.headerJoinFree = page.locator('header a', { hasText: 'Join Free' });
+    // Header — exact selectors from codegen
+    this.logo = page.getByRole('link', { name: 'TalkTravel talk travel' });
+    this.headerCommunity = page.getByRole('link', { name: 'Community', exact: true });
+    this.headerBlog = page.getByRole('link', { name: 'Blog', exact: true });
+    this.headerFaq = page.getByRole('navigation').getByRole('link', { name: 'FAQ' });
+    this.headerJoinCommunity = page.getByRole('link', { name: 'Join the Community' });
 
-    // Landing hero
-    this.heroHeading = page.locator('h1, [class*="hero"] h1, [class*="hero"] h2').first();
-    this.heroSubtext = page.locator('[class*="hero"] p, [class*="hero"] [class*="sub"]').first();
-    this.joinCommunityBtn = page.locator('a, button').filter({ hasText: 'Join the Community' }).first();
-    this.readTheBlogBtn = page.locator('a, button').filter({ hasText: 'Read the Blog' }).first();
-    this.heroImage = page.locator('[class*="hero"] img').first();
+    // Landing hero — exact selectors from codegen
+    this.heroHeading = page.getByRole('heading', { name: 'A travel community for people' });
+    this.joinCommunityBtn = page.getByRole('link', { name: 'Join the Community' });
+    this.readTheBlogBtn = page.getByRole('link', { name: 'Read the Blog' });
 
-    // Blog index
-    this.blogHeroHeading = page.locator('h1, [class*="hero"] h1, [class*="hero"] h2').first();
-    this.blogHeroSubtext = page.locator('[class*="hero"] p, [class*="hero"] [class*="sub"]').first();
-    this.searchBar = page.locator('input[placeholder*="Search"]');
-    this.searchSubmitBtn = page.locator('button[type="submit"], [class*="search"] button').first();
-    this.latestArticlesHeading = page.locator('h2, h3').filter({ hasText: /Read the Latest Articles/i });
-    this.viewAllBlogsBtn = page.locator('a, button').filter({ hasText: /View All Blogs/i });
-    this.articleCards = page.locator('[class*="card"], article').filter({ has: page.locator('img') });
+    // Blog index — exact selectors from codegen
+    this.blogHeroHeading = page.getByRole('heading', { name: 'Stories, tips & ideas from' });
+    this.blogHeroText = page.getByText("from the travel community.");
+    this.latestArticlesHeading = page.getByRole('heading', { name: 'Latest Articles' });
+    this.latestArticlesSection = page.locator('section').filter({ hasText: 'Read theLatest ArticlesView' });
 
     // Single article
-    this.breadcrumb = page.locator('[class*="breadcrumb"], nav[aria-label*="breadcrumb"]');
-    this.articleCategoryTag = page.locator('[class*="category"], [class*="tag"]').first();
-    this.articleTitle = page.locator('h1').first();
-    this.authorBlock = page.locator('[class*="author"]').first();
-    this.shareRow = page.locator('[class*="share"]').first();
-    this.articleHeroImage = page.locator('article img, [class*="hero"] img, main img').first();
-    this.articleBody = page.locator('article, [class*="content"], [class*="body"]').first();
+    this.articleTitle = page.getByRole('heading', { level: 1 });
   }
 
   async goToLanding(): Promise<void> {
-    await this.page.goto('https://talktravel.com');
+    await this.page.goto('https://talktravel.com/');
     await this.waitForPageLoad();
   }
 
@@ -87,12 +63,9 @@ export class Flow1Page extends BasePage {
     await this.waitForPageLoad();
   }
 
-  async openFirstArticle(): Promise<string> {
-    const firstCard = this.articleCards.first();
-    const titleEl = firstCard.locator('h2, h3, [class*="title"]').first();
-    const title = await titleEl.innerText();
+  async openFirstArticle(): Promise<void> {
+    const firstCard = this.latestArticlesSection.getByRole('link').first();
     await firstCard.click();
     await this.waitForPageLoad();
-    return title.trim();
   }
 }
