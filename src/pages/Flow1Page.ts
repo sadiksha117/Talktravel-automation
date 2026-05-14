@@ -64,8 +64,7 @@ export class Flow1Page extends BasePage {
   }
 
   async openFirstArticle(): Promise<void> {
-    const firstCard = this.latestArticlesSection.getByRole('link').first();
-    await firstCard.click();
+    await this.latestArticlesSection.locator('article').first().getByRole('link').first().click();
     await this.waitForPageLoad();
   }
 }
