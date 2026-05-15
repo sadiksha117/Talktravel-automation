@@ -77,7 +77,9 @@ export class Flow2Page extends BasePage {
     this.alreadyHaveAccountLink = page.getByRole('link', { name: /login/i });
     this.continueWithGoogleBtn = page.getByRole('button', { name: /continue with google/i });
     this.continueWithAppleBtn = page.getByRole('button', { name: /continue with apple/i });
-    this.submitBtn = page.getByRole('button', { name: /create account|continue|sign up/i });
+    this.submitBtn = page.locator('button[type="submit"]:not(.oauth-button)').or(
+      page.locator('form button[type="submit"]')
+    ).first();
   }
 
   async goToLanding(): Promise<void> {
