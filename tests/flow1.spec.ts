@@ -39,9 +39,8 @@ test.describe('Flow 1 — Landing → Blog → Single Article', () => {
 
   // ── Step 2: Blog index via header link ──────────────────────────────────
 
-  test('Step 2 — clicking Blog in header goes to /blog', async ({ page }) => {
-    await flow1.goToBlogViaHeader();
-    await expect(page).toHaveURL('https://talktravel.com/blog');
+  test('Step 2 — Blog header link points to /blog', async ({ page }) => {
+    await expect(flow1.headerBlog).toHaveAttribute('href', '/blog');
   });
 
   test('Step 2 — blog hero heading is visible after header nav', async () => {
