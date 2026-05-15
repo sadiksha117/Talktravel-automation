@@ -88,14 +88,18 @@ export class Flow2Page extends BasePage {
   }
 
   async goToRegisterViaJoinFreeHeader(): Promise<void> {
-    await this.headerJoinFree.click();
-    await this.page.waitForURL('**/register');
+    await Promise.all([
+      this.page.waitForURL('**/register'),
+      this.headerJoinFree.click(),
+    ]);
     await this.waitForPageLoad();
   }
 
   async goToRegisterViaJoinCommunityCta(): Promise<void> {
-    await this.joinCommunityBtn.click();
-    await this.page.waitForURL('**/register');
+    await Promise.all([
+      this.page.waitForURL('**/register'),
+      this.joinCommunityBtn.click(),
+    ]);
     await this.waitForPageLoad();
   }
 
