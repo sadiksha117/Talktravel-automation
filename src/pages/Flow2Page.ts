@@ -61,7 +61,11 @@ export class Flow2Page extends BasePage {
     this.registerSubtext = page.getByText('By continuing, you agree to our');
     this.avatarImage = page.locator('img[alt*="avatar"], img[alt*="Avatar"], [data-testid*="avatar"] img').first();
     this.generateAvatarLink = page.getByRole('link', { name: 'Generate' }).or(page.getByText('Generate'));
-    this.usernameField = page.getByRole('textbox', { name: /username/i });
+    this.usernameField = page.getByLabel(/username/i).or(
+      page.locator('input[name="username"]')
+    ).or(
+      page.locator('input[placeholder*="username" i]')
+    ).first();
     this.emailPhoneField = page.getByRole('textbox', { name: /email or phone/i });
     this.passwordField = page.getByRole('textbox', { name: /^password$/i }).or(
       page.locator('input[type="password"]').first()
