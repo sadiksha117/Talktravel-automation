@@ -1,5 +1,5 @@
-import { test, expect } from '@playwright/test';
-import { Flow2Page } from '../src/pages/Flow2Page';
+import { expect, test } from '@playwright/test';
+import { Flow2Page } from '../src/pages/Landing → Create Account';
 
 test.describe('Flow 2 — Landing → Create Account', () => {
   let flow2: Flow2Page;
