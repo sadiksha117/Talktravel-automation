@@ -1,5 +1,5 @@
-import { test, expect } from '@playwright/test';
-import { Flow1Page } from '../src/pages/Flow1Page';
+import { expect, test } from '@playwright/test';
+import { Flow1Page } from '../src/pages/LandingtoblogSingleArticle';
 
 test.describe('Flow 1 — Landing → Blog → Single Article', () => {
   let flow1: Flow1Page;

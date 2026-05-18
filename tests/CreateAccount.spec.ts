@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { CreateAccountPage } from '../src/pages/CreateAccountPage';
+import { CreateAccountPage } from '../src/pages/CreateAccount';
 
 test.describe('Flow 2 — Landing → Create Account', () => {
   let flow2: CreateAccountPage;
