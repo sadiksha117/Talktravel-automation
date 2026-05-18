@@ -1,7 +1,7 @@
 import { type Page, type Locator } from '@playwright/test';
 import { BasePage } from './BasePage';
 
-export class Flow2Page extends BasePage {
+export class CreateAccountPage extends BasePage {
   // Header (landing)
   readonly logo: Locator;
   readonly headerCommunity: Locator;

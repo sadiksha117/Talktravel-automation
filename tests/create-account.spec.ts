@@ -1,11 +1,11 @@
 import { test, expect } from '@playwright/test';
-import { Flow2Page } from '../src/pages/Flow2Page';
+import { CreateAccountPage } from '../src/pages/CreateAccountPage';
 
 test.describe('Flow 2 — Landing → Create Account', () => {
-  let flow2: Flow2Page;
+  let flow2: CreateAccountPage;
 
   test.beforeEach(async ({ page }) => {
-    flow2 = new Flow2Page(page);
+    flow2 = new CreateAccountPage(page);
     await flow2.goToLanding();
   });
 
