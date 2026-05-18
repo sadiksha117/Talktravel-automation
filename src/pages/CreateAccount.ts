@@ -73,7 +73,7 @@ export class CreateAccountPage extends BasePage {
     this.confirmPasswordField = page.getByRole('textbox', { name: /confirm password/i }).or(
       page.locator('input[type="password"]').nth(1)
     );
-    this.passwordToggle = page.locator('(//input[@type="password"])[1]/following-sibling::img[1]');
+    this.passwordToggle = page.locator('div:has(> input[type="password"]) > img').first();
     this.alreadyHaveAccountLink = page.getByRole('link', { name: /login/i });
     this.continueWithGoogleBtn = page.getByRole('button', { name: /continue with google/i });
     this.continueWithAppleBtn = page.getByRole('button', { name: /continue with apple/i });
