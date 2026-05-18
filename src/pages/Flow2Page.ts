@@ -73,7 +73,7 @@ export class Flow2Page extends BasePage {
     this.confirmPasswordField = page.getByRole('textbox', { name: /confirm password/i }).or(
       page.locator('input[type="password"]').nth(1)
     );
-    this.passwordToggle = page.locator('input[type="password"]').first().locator('xpath=following-sibling::img');
+    this.passwordToggle = page.locator('input[type="password"]').first().locator('..').locator('img').first();
     this.alreadyHaveAccountLink = page.getByRole('link', { name: /login/i });
     this.continueWithGoogleBtn = page.getByRole('button', { name: /continue with google/i });
     this.continueWithAppleBtn = page.getByRole('button', { name: /continue with apple/i });
