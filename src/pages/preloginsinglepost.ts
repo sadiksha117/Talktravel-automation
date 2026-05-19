@@ -52,16 +52,19 @@ export class PreLoginSinglePostPage extends BasePage {
     this.readTheBlogBtn = page.getByRole('link', { name: 'Read the Blog' });
     this.heroImage = page.locator('img').first();
 
-    // Trending feed — post cards are <a href="/post/..."> link elements
+    // Trending feed — post cards are <a href="/post/..."> link elements with child content
     this.feedTabTrending = page.getByRole('link', { name: 'Trending', exact: true });
     this.feedTabLatest = page.getByRole('link', { name: 'Latest', exact: true });
-    this.feedPostCards = page.locator('main a[href^="/post/"]');
+    // Feed cards are large anchor elements (href="/post/...") with multiple child elements
+    // (author info, title, snippet, tags, vote counts) — sidebar "Popular This Week" links
+    // are simpler anchors without div children, so we use :has(div) to target only feed cards
+    this.feedPostCards = page.locator('a[href^="/post/"]:has(div)');
     this.popularThisWeek = page.getByText('Popular This Week');
     this.footer = page.locator('footer');
 
     // Single post view
     this.postTitle = page.getByRole('heading', { level: 1 });
-    this.postContent = page.locator('main').first();
+    this.postContent = page.locator('main, [role="main"], #__next > div').first();
     this.authorAvatar = page.locator('img[alt*="avatar"], img[alt*="Avatar"], img[alt*="profile"], img[alt*="Profile"]').first();
     this.voteSection = page.locator('[class*="vote"], [data-testid*="vote"]').first();
     this.commentsSection = page.locator('[class*="comment"], [data-testid*="comment"]').first();
