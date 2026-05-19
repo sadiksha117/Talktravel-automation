@@ -20,8 +20,6 @@ export class PreLoginSinglePostPage extends BasePage {
   // Trending feed
   readonly feedTabTrending: Locator;
   readonly feedTabLatest: Locator;
-  readonly viewToggleCard: Locator;
-  readonly viewToggleCompact: Locator;
   readonly feedPostCards: Locator;
   readonly popularThisWeek: Locator;
   readonly footer: Locator;
@@ -54,18 +52,16 @@ export class PreLoginSinglePostPage extends BasePage {
     this.readTheBlogBtn = page.getByRole('link', { name: 'Read the Blog' });
     this.heroImage = page.locator('img').first();
 
-    // Trending feed
+    // Trending feed — post cards are <a href="/post/..."> link elements
     this.feedTabTrending = page.getByRole('link', { name: 'Trending', exact: true });
     this.feedTabLatest = page.getByRole('link', { name: 'Latest', exact: true });
-    this.viewToggleCard = page.getByRole('button', { name: 'Card', exact: true });
-    this.viewToggleCompact = page.getByRole('button', { name: 'Compact', exact: true });
-    this.feedPostCards = page.locator('article');
+    this.feedPostCards = page.locator('main a[href^="/post/"]');
     this.popularThisWeek = page.getByText('Popular This Week');
     this.footer = page.locator('footer');
 
     // Single post view
     this.postTitle = page.getByRole('heading', { level: 1 });
-    this.postContent = page.locator('article').first();
+    this.postContent = page.locator('main').first();
     this.authorAvatar = page.locator('img[alt*="avatar"], img[alt*="Avatar"], img[alt*="profile"], img[alt*="Profile"]').first();
     this.voteSection = page.locator('[class*="vote"], [data-testid*="vote"]').first();
     this.commentsSection = page.locator('[class*="comment"], [data-testid*="comment"]').first();
@@ -95,11 +91,11 @@ export class PreLoginSinglePostPage extends BasePage {
 
   async openFirstPostCard(): Promise<string> {
     const firstCard = this.feedPostCards.first();
-    const titleEl = firstCard.getByRole('heading').first();
-    const titleText = await titleEl.innerText();
+    await firstCard.waitFor({ state: 'visible' });
+    const href = await firstCard.getAttribute('href') ?? '';
     await firstCard.click();
     await this.page.waitForURL('**/post/**');
     await this.waitForPageLoad();
-    return titleText;
+    return href;
   }
 }

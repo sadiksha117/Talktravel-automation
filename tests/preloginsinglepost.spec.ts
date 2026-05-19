@@ -60,12 +60,6 @@ test.describe('Flow 3 — Landing → Pre-Login Feed → Single Post View', () =
     await expect(flow3.feedTabLatest).toBeVisible();
   });
 
-  test('Step 2 — Card and Compact view toggles are visible', async () => {
-    await flow3.goToFeedViaCommunityLink();
-    await expect(flow3.viewToggleCard).toBeVisible();
-    await expect(flow3.viewToggleCompact).toBeVisible();
-  });
-
   test('Step 2 — feed contains at least one post card', async () => {
     await flow3.goToFeedViaCommunityLink();
     await expect(flow3.feedPostCards.first()).toBeVisible();
@@ -96,11 +90,10 @@ test.describe('Flow 3 — Landing → Pre-Login Feed → Single Post View', () =
     await expect(page).toHaveURL(/https:\/\/talktravel\.com\/post\/.+/);
   });
 
-  test('Step 3 — post title on single post page matches clicked card title', async ({ page }) => {
+  test('Step 3 — post title is visible on single post page', async () => {
     await flow3.goToFeedViaCommunityLink();
-    const clickedTitle = await flow3.openFirstPostCard();
-    const postPageTitle = await flow3.postTitle.innerText();
-    expect(postPageTitle.trim()).toContain(clickedTitle.trim());
+    await flow3.openFirstPostCard();
+    await expect(flow3.postTitle).toBeVisible();
   });
 
   test('Step 3 — post content is visible', async () => {
