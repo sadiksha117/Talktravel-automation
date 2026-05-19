@@ -1,8 +1,105 @@
-import { type Page } from '@playwright/test';
+import { type Page, type Locator } from '@playwright/test';
 import { BasePage } from './BasePage';
 
-export class Flow3Page extends BasePage {
+export class PreLoginSinglePostPage extends BasePage {
+  // Header
+  readonly logo: Locator;
+  readonly headerCommunity: Locator;
+  readonly headerBlog: Locator;
+  readonly headerFaq: Locator;
+  readonly headerLogIn: Locator;
+  readonly headerJoinFree: Locator;
+
+  // Landing hero
+  readonly heroHeading: Locator;
+  readonly heroSubtext: Locator;
+  readonly joinCommunityBtn: Locator;
+  readonly readTheBlogBtn: Locator;
+  readonly heroImage: Locator;
+
+  // Trending feed
+  readonly feedTabTrending: Locator;
+  readonly feedTabLatest: Locator;
+  readonly viewToggleCard: Locator;
+  readonly viewToggleCompact: Locator;
+  readonly feedPostCards: Locator;
+  readonly popularThisWeek: Locator;
+  readonly footer: Locator;
+
+  // Single post view
+  readonly postTitle: Locator;
+  readonly postContent: Locator;
+  readonly authorAvatar: Locator;
+  readonly voteSection: Locator;
+  readonly commentsSection: Locator;
+  readonly sortByDropdown: Locator;
+  readonly shareButton: Locator;
+  readonly loginButton: Locator;
+
   constructor(page: Page) {
     super(page);
+
+    // Header
+    this.logo = page.getByRole('link', { name: 'TalkTravel talk travel' });
+    this.headerCommunity = page.getByRole('link', { name: 'Community', exact: true });
+    this.headerBlog = page.getByRole('link', { name: 'Blog', exact: true });
+    this.headerFaq = page.getByRole('navigation').getByRole('link', { name: 'FAQ' });
+    this.headerLogIn = page.getByRole('link', { name: 'Log in', exact: true });
+    this.headerJoinFree = page.getByRole('link', { name: 'Join Free', exact: true });
+
+    // Landing hero
+    this.heroHeading = page.getByRole('heading', { name: 'A travel community for people' });
+    this.heroSubtext = page.getByText('Real tips from real travelers');
+    this.joinCommunityBtn = page.getByRole('link', { name: 'Join the Community' });
+    this.readTheBlogBtn = page.getByRole('link', { name: 'Read the Blog' });
+    this.heroImage = page.locator('img').first();
+
+    // Trending feed
+    this.feedTabTrending = page.getByRole('link', { name: 'Trending', exact: true });
+    this.feedTabLatest = page.getByRole('link', { name: 'Latest', exact: true });
+    this.viewToggleCard = page.getByRole('button', { name: 'Card', exact: true });
+    this.viewToggleCompact = page.getByRole('button', { name: 'Compact', exact: true });
+    this.feedPostCards = page.locator('article');
+    this.popularThisWeek = page.getByText('Popular This Week');
+    this.footer = page.locator('footer');
+
+    // Single post view
+    this.postTitle = page.getByRole('heading', { level: 1 });
+    this.postContent = page.locator('article').first();
+    this.authorAvatar = page.locator('img[alt*="avatar"], img[alt*="Avatar"], img[alt*="profile"], img[alt*="Profile"]').first();
+    this.voteSection = page.locator('[class*="vote"], [data-testid*="vote"]').first();
+    this.commentsSection = page.locator('[class*="comment"], [data-testid*="comment"]').first();
+    this.sortByDropdown = page.getByRole('combobox').or(page.getByLabel(/sort/i)).first();
+    this.shareButton = page.getByRole('button', { name: /share/i });
+    this.loginButton = page.getByRole('button', { name: /login/i }).or(page.getByRole('link', { name: /login/i })).first();
+  }
+
+  async goToLanding(): Promise<void> {
+    await this.page.goto('https://talktravel.com/');
+    await this.waitForPageLoad();
+  }
+
+  async dismissCookieBanner(): Promise<void> {
+    const acceptBtn = this.page.getByRole('button', { name: 'Accept All' });
+    if (await acceptBtn.isVisible()) {
+      await acceptBtn.click();
+    }
+  }
+
+  async goToFeedViaCommunityLink(): Promise<void> {
+    await this.headerCommunity.click();
+    await this.page.waitForURL('**/trending');
+    await this.waitForPageLoad();
+    await this.dismissCookieBanner();
+  }
+
+  async openFirstPostCard(): Promise<string> {
+    const firstCard = this.feedPostCards.first();
+    const titleEl = firstCard.getByRole('heading').first();
+    const titleText = await titleEl.innerText();
+    await firstCard.click();
+    await this.page.waitForURL('**/post/**');
+    await this.waitForPageLoad();
+    return titleText;
   }
 }
