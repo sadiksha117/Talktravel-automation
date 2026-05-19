@@ -64,9 +64,9 @@ export class PreLoginSinglePostPage extends BasePage {
 
     // Single post view
     this.postTitle = page.getByRole('heading', { level: 1 });
-    this.postContent = page.locator('main, [role="main"], #__next > div').first();
+    this.postContent = page.locator('article, [role="article"], [class*="post" i], [class*="content" i]').first();
     this.authorAvatar = page.locator('img[alt*="avatar"], img[alt*="Avatar"], img[alt*="profile"], img[alt*="Profile"]').first();
-    this.voteSection = page.locator('[class*="vote"], [data-testid*="vote"]').first();
+    this.voteSection = page.locator('[class*="vote" i], [data-testid*="vote" i], [aria-label*="vote" i], [aria-label*="upvote" i]').first();
     this.commentsSection = page.locator('[class*="comment"], [data-testid*="comment"]').first();
     this.sortByDropdown = page.getByRole('combobox').or(page.getByLabel(/sort/i)).first();
     this.shareButton = page.getByRole('button', { name: /share/i });
