@@ -221,14 +221,6 @@ test.describe('Flow 2 — Landing → Create Account', () => {
     await expect(page).toHaveURL('https://talktravel.com/register');
   });
 
-  test.skip('edge — password visibility toggle reveals plain text', async () => {
-    await flow2.goToRegisterViaJoinFreeHeader();
-    await flow2.passwordField.fill('TestPass@123');
-    await flow2.passwordToggle.click();
-    const inputType = await flow2.passwordField.getAttribute('type');
-    expect(inputType).toBe('text');
-  });
-
   test('edge — Already have an account Login link navigates to /login', async ({ page }) => {
     await flow2.goToRegisterViaJoinFreeHeader();
     await Promise.all([
