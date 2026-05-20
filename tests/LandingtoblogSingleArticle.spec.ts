@@ -125,4 +125,65 @@ test.describe('Flow 1 — Landing → Blog → Single Article', () => {
     await expect(page).toHaveURL(/https:\/\/staging\.talktravel\.com\/blog\/.+/);
     await expect(flow1.articleTitle).toBeVisible();
   });
+
+  // ── Edge cases ───────────────────────────────────────────────────────────
+
+  test('Edge — Step 1: logo href points to homepage', async () => {
+    await expect(flow1.logo).toHaveAttribute('href', '/');
+  });
+
+  test('Edge — Step 2: blog search bar is visible', async () => {
+    await flow1.goToBlogViaHeader();
+    await expect(flow1.blogSearchBar).toBeVisible();
+  });
+
+  test('Edge — Step 2: View All Blogs button is visible', async () => {
+    await flow1.goToBlogViaHeader();
+    await expect(flow1.viewAllBlogsBtn).toBeVisible();
+  });
+
+  test('Edge — Step 2: direct navigation to /blog loads correctly without landing', async ({ page }) => {
+    await page.goto('/blog');
+    await flow1.waitForPageLoad();
+    await expect(page).toHaveURL('https://staging.talktravel.com/blog');
+    await expect(flow1.latestArticlesHeading).toBeVisible();
+  });
+
+  test('Edge — Step 2: Latest Articles grid contains at least 3 cards', async () => {
+    await flow1.goToBlogViaHeader();
+    const cardCount = await flow1.latestArticlesSection.locator('article').count();
+    expect(cardCount).toBeGreaterThanOrEqual(3);
+  });
+
+  test('Edge — Step 3: article breadcrumb is visible', async () => {
+    await flow1.goToBlogViaHeader();
+    await flow1.openFirstArticle();
+    await expect(flow1.articleBreadcrumb).toBeVisible();
+  });
+
+  test('Edge — Step 3: article author block is visible', async () => {
+    await flow1.goToBlogViaHeader();
+    await flow1.openFirstArticle();
+    await expect(flow1.articleAuthorBlock).toBeVisible();
+  });
+
+  test('Edge — Step 3: article share row is visible', async () => {
+    await flow1.goToBlogViaHeader();
+    await flow1.openFirstArticle();
+    await expect(flow1.articleShareRow).toBeVisible();
+  });
+
+  test('Edge — Step 3: logo is visible on article page', async () => {
+    await flow1.goToBlogViaHeader();
+    await flow1.openFirstArticle();
+    await expect(flow1.logo).toBeVisible();
+  });
+
+  test('Edge — Step 3: article body content is present', async () => {
+    await flow1.goToBlogViaHeader();
+    await flow1.openFirstArticle();
+    await expect(flow1.articleBody).toBeVisible();
+    const bodyText = await flow1.articleBody.innerText();
+    expect(bodyText.trim().length).toBeGreaterThan(0);
+  });
 });

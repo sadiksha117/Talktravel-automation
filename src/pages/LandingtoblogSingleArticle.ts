@@ -18,9 +18,15 @@ export class Flow1Page extends BasePage {
   readonly blogHeroText: Locator;
   readonly latestArticlesHeading: Locator;
   readonly latestArticlesSection: Locator;
+  readonly blogSearchBar: Locator;
+  readonly viewAllBlogsBtn: Locator;
 
   // Single article
   readonly articleTitle: Locator;
+  readonly articleBreadcrumb: Locator;
+  readonly articleAuthorBlock: Locator;
+  readonly articleShareRow: Locator;
+  readonly articleBody: Locator;
 
   constructor(page: Page) {
     super(page);
@@ -45,9 +51,15 @@ export class Flow1Page extends BasePage {
     }).filter({
       has: page.locator('article'),
     }).first();
+    this.blogSearchBar = page.getByPlaceholder('Search articles...');
+    this.viewAllBlogsBtn = page.getByRole('link', { name: 'View All Blogs' });
 
     // Single article
     this.articleTitle = page.getByRole('heading', { level: 1 });
+    this.articleBreadcrumb = page.locator('[class*="breadcrumb"]').first();
+    this.articleAuthorBlock = page.getByText(/Written by/);
+    this.articleShareRow = page.locator('[class*="share"]').first();
+    this.articleBody = page.locator('article').first();
   }
 
   async goToLanding(): Promise<void> {
