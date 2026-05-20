@@ -12,7 +12,7 @@ test.describe('Flow 2 — Landing → Create Account', () => {
   // ── Step 1: Landing page ─────────────────────────────────────────────────
 
   test('Step 1 — landing page loads at correct URL', async ({ page }) => {
-    await expect(page).toHaveURL('https://talktravel.com/');
+    await expect(page).toHaveURL('https://staging.talktravel.com/');
   });
 
   test('Step 1 — logo is visible in header', async () => {
@@ -50,12 +50,12 @@ test.describe('Flow 2 — Landing → Create Account', () => {
 
   test('Step 2 — Join Free header button navigates to /register', async ({ page }) => {
     await flow2.goToRegisterViaJoinFreeHeader();
-    await expect(page).toHaveURL('https://talktravel.com/register');
+    await expect(page).toHaveURL('https://staging.talktravel.com/register');
   });
 
   test('Step 2 — Join the Community CTA navigates to /register', async ({ page }) => {
     await flow2.goToRegisterViaJoinCommunityCta();
-    await expect(page).toHaveURL('https://talktravel.com/register');
+    await expect(page).toHaveURL('https://staging.talktravel.com/register');
   });
 
   test('Step 2 — register page heading is visible', async () => {
@@ -164,17 +164,17 @@ test.describe('Flow 2 — Landing → Create Account', () => {
       'TestPass@123'
     );
     await flow2.submitForm();
-    await expect(page).not.toHaveURL('https://talktravel.com/register');
+    await expect(page).not.toHaveURL('https://staging.talktravel.com/register');
   });
 
   // ── Full end-to-end happy paths ───────────────────────────────────────────
 
   test('happy path — Landing → Register via Join Free header → fill form → submit', async ({ page }) => {
-    await expect(page).toHaveURL('https://talktravel.com/');
+    await expect(page).toHaveURL('https://staging.talktravel.com/');
     await expect(flow2.heroHeading).toBeVisible();
 
     await flow2.goToRegisterViaJoinFreeHeader();
-    await expect(page).toHaveURL('https://talktravel.com/register');
+    await expect(page).toHaveURL('https://staging.talktravel.com/register');
     await expect(flow2.registerHeading).toBeVisible();
 
     await flow2.fillSignupForm(
@@ -183,15 +183,15 @@ test.describe('Flow 2 — Landing → Create Account', () => {
       'TestPass@123'
     );
     await flow2.submitForm();
-    await expect(page).not.toHaveURL('https://talktravel.com/register');
+    await expect(page).not.toHaveURL('https://staging.talktravel.com/register');
   });
 
   test('happy path — Landing → Register via Join the Community CTA → fill form → submit', async ({ page }) => {
-    await expect(page).toHaveURL('https://talktravel.com/');
+    await expect(page).toHaveURL('https://staging.talktravel.com/');
     await expect(flow2.joinCommunityBtn).toBeVisible();
 
     await flow2.goToRegisterViaJoinCommunityCta();
-    await expect(page).toHaveURL('https://talktravel.com/register');
+    await expect(page).toHaveURL('https://staging.talktravel.com/register');
     await expect(flow2.registerHeading).toBeVisible();
 
     await flow2.fillSignupForm(
@@ -200,7 +200,7 @@ test.describe('Flow 2 — Landing → Create Account', () => {
       'TestPass@123'
     );
     await flow2.submitForm();
-    await expect(page).not.toHaveURL('https://talktravel.com/register');
+    await expect(page).not.toHaveURL('https://staging.talktravel.com/register');
   });
 
   // ── Edge cases ────────────────────────────────────────────────────────────
@@ -208,7 +208,7 @@ test.describe('Flow 2 — Landing → Create Account', () => {
   test('edge — submitting empty form shows validation errors', async ({ page }) => {
     await flow2.goToRegisterViaJoinFreeHeader();
     await flow2.submitForm();
-    await expect(page).toHaveURL('https://talktravel.com/register');
+    await expect(page).toHaveURL('https://staging.talktravel.com/register');
   });
 
   test('edge — mismatched confirm password keeps user on register page', async ({ page }) => {
@@ -218,7 +218,7 @@ test.describe('Flow 2 — Landing → Create Account', () => {
     await flow2.passwordField.fill('TestPass@123');
     await flow2.confirmPasswordField.fill('WrongPass@999');
     await flow2.submitForm();
-    await expect(page).toHaveURL('https://talktravel.com/register');
+    await expect(page).toHaveURL('https://staging.talktravel.com/register');
   });
 
   test('edge — Already have an account Login link navigates to /login', async ({ page }) => {
@@ -227,11 +227,11 @@ test.describe('Flow 2 — Landing → Create Account', () => {
       page.waitForURL('**/login'),
       flow2.alreadyHaveAccountLink.click(),
     ]);
-    await expect(page).toHaveURL('https://talktravel.com/login');
+    await expect(page).toHaveURL('https://staging.talktravel.com/login');
   });
 
   test('edge — direct navigation to /register loads the form', async ({ page }) => {
-    await page.goto('https://talktravel.com/register');
+    await page.goto('https://staging.talktravel.com/register');
     await expect(flow2.registerHeading).toBeVisible();
     await expect(flow2.usernameField).toBeVisible();
   });
@@ -240,27 +240,27 @@ test.describe('Flow 2 — Landing → Create Account', () => {
     await flow2.goToRegisterViaJoinFreeHeader();
     await flow2.fillSignupForm(`tester${Date.now()}`, 'notanemail', 'TestPass@123');
     await flow2.submitForm();
-    await expect(page).toHaveURL('https://talktravel.com/register');
+    await expect(page).toHaveURL('https://staging.talktravel.com/register');
   });
 
   test('edge — username with only spaces keeps user on register page', async ({ page }) => {
     await flow2.goToRegisterViaJoinFreeHeader();
     await flow2.fillSignupForm('   ', `tester${Date.now()}@example.com`, 'TestPass@123');
     await flow2.submitForm();
-    await expect(page).toHaveURL('https://talktravel.com/register');
+    await expect(page).toHaveURL('https://staging.talktravel.com/register');
   });
 
   test('edge — XSS payload in username is not executed', async ({ page }) => {
     await flow2.goToRegisterViaJoinFreeHeader();
     await flow2.usernameField.fill('<script>alert(1)</script>');
     await flow2.submitForm();
-    await expect(page).toHaveURL('https://talktravel.com/register');
+    await expect(page).toHaveURL('https://staging.talktravel.com/register');
   });
 
   test('edge — very long username (200 chars) does not crash the page', async ({ page }) => {
     await flow2.goToRegisterViaJoinFreeHeader();
     await flow2.usernameField.fill('a'.repeat(200));
-    await expect(page).toHaveURL('https://talktravel.com/register');
+    await expect(page).toHaveURL('https://staging.talktravel.com/register');
     await expect(flow2.registerHeading).toBeVisible();
   });
 
@@ -268,7 +268,7 @@ test.describe('Flow 2 — Landing → Create Account', () => {
     await flow2.goToRegisterViaJoinFreeHeader();
     await flow2.fillSignupForm(`tester${Date.now()}`, '9800000000', 'TestPass@123');
     await flow2.submitForm();
-    await expect(page).toHaveURL('https://talktravel.com/register');
+    await expect(page).toHaveURL('https://staging.talktravel.com/register');
   });
 
   // ── Negative cases ────────────────────────────────────────────────────────
@@ -277,49 +277,49 @@ test.describe('Flow 2 — Landing → Create Account', () => {
     await flow2.goToRegisterViaJoinFreeHeader();
     await flow2.fillSignupForm(`tester${Date.now()}`, `tester${Date.now()}@example.com`, 'abc');
     await flow2.submitForm();
-    await expect(page).toHaveURL('https://talktravel.com/register');
+    await expect(page).toHaveURL('https://staging.talktravel.com/register');
   });
 
   test('negative — password with no special character keeps user on register page', async ({ page }) => {
     await flow2.goToRegisterViaJoinFreeHeader();
     await flow2.fillSignupForm(`tester${Date.now()}`, `tester${Date.now()}@example.com`, 'TestPass123');
     await flow2.submitForm();
-    await expect(page).toHaveURL('https://talktravel.com/register');
+    await expect(page).toHaveURL('https://staging.talktravel.com/register');
   });
 
   test('negative — password with only spaces keeps user on register page', async ({ page }) => {
     await flow2.goToRegisterViaJoinFreeHeader();
     await flow2.fillSignupForm(`tester${Date.now()}`, `tester${Date.now()}@example.com`, '        ');
     await flow2.submitForm();
-    await expect(page).toHaveURL('https://talktravel.com/register');
+    await expect(page).toHaveURL('https://staging.talktravel.com/register');
   });
 
   test('negative — email missing @ symbol keeps user on register page', async ({ page }) => {
     await flow2.goToRegisterViaJoinFreeHeader();
     await flow2.fillSignupForm(`tester${Date.now()}`, 'testerdomain.com', 'TestPass@123');
     await flow2.submitForm();
-    await expect(page).toHaveURL('https://talktravel.com/register');
+    await expect(page).toHaveURL('https://staging.talktravel.com/register');
   });
 
   test('negative — email missing domain keeps user on register page', async ({ page }) => {
     await flow2.goToRegisterViaJoinFreeHeader();
     await flow2.fillSignupForm(`tester${Date.now()}`, 'tester@', 'TestPass@123');
     await flow2.submitForm();
-    await expect(page).toHaveURL('https://talktravel.com/register');
+    await expect(page).toHaveURL('https://staging.talktravel.com/register');
   });
 
   test('negative — single character username keeps user on register page', async ({ page }) => {
     await flow2.goToRegisterViaJoinFreeHeader();
     await flow2.fillSignupForm('a', `tester${Date.now()}@example.com`, 'TestPass@123');
     await flow2.submitForm();
-    await expect(page).toHaveURL('https://talktravel.com/register');
+    await expect(page).toHaveURL('https://staging.talktravel.com/register');
   });
 
   test('negative — username with special characters keeps user on register page', async ({ page }) => {
     await flow2.goToRegisterViaJoinFreeHeader();
     await flow2.fillSignupForm('user!@#$%', `tester${Date.now()}@example.com`, 'TestPass@123');
     await flow2.submitForm();
-    await expect(page).toHaveURL('https://talktravel.com/register');
+    await expect(page).toHaveURL('https://staging.talktravel.com/register');
   });
 
   test('negative — confirm password left empty keeps user on register page', async ({ page }) => {
@@ -328,70 +328,70 @@ test.describe('Flow 2 — Landing → Create Account', () => {
     await flow2.emailPhoneField.fill(`tester${Date.now()}@example.com`);
     await flow2.passwordField.fill('TestPass@123');
     await flow2.submitForm();
-    await expect(page).toHaveURL('https://talktravel.com/register');
+    await expect(page).toHaveURL('https://staging.talktravel.com/register');
   });
 
   test('negative — only password filled keeps user on register page', async ({ page }) => {
     await flow2.goToRegisterViaJoinFreeHeader();
     await flow2.passwordField.fill('TestPass@123');
     await flow2.submitForm();
-    await expect(page).toHaveURL('https://talktravel.com/register');
+    await expect(page).toHaveURL('https://staging.talktravel.com/register');
   });
 
   test('negative — only email filled keeps user on register page', async ({ page }) => {
     await flow2.goToRegisterViaJoinFreeHeader();
     await flow2.emailPhoneField.fill(`tester${Date.now()}@example.com`);
     await flow2.submitForm();
-    await expect(page).toHaveURL('https://talktravel.com/register');
+    await expect(page).toHaveURL('https://staging.talktravel.com/register');
   });
 
   test('negative — SQL injection in email field keeps user on register page', async ({ page }) => {
     await flow2.goToRegisterViaJoinFreeHeader();
     await flow2.fillSignupForm(`tester${Date.now()}`, "' OR 1=1 --", 'TestPass@123');
     await flow2.submitForm();
-    await expect(page).toHaveURL('https://talktravel.com/register');
+    await expect(page).toHaveURL('https://staging.talktravel.com/register');
   });
 
   test('negative — XSS payload in email field is not executed', async ({ page }) => {
     await flow2.goToRegisterViaJoinFreeHeader();
     await flow2.fillSignupForm(`tester${Date.now()}`, '<script>alert(1)</script>@x.com', 'TestPass@123');
     await flow2.submitForm();
-    await expect(page).toHaveURL('https://talktravel.com/register');
+    await expect(page).toHaveURL('https://staging.talktravel.com/register');
   });
 
   test('negative — very long email does not crash the page', async ({ page }) => {
     await flow2.goToRegisterViaJoinFreeHeader();
     await flow2.fillSignupForm(`tester${Date.now()}`, `${'a'.repeat(200)}@example.com`, 'TestPass@123');
     await flow2.submitForm();
-    await expect(page).toHaveURL('https://talktravel.com/register');
+    await expect(page).toHaveURL('https://staging.talktravel.com/register');
   });
 
   test('negative — very long password does not crash the page', async ({ page }) => {
     await flow2.goToRegisterViaJoinFreeHeader();
     await flow2.fillSignupForm(`tester${Date.now()}`, `tester${Date.now()}@example.com`, 'A1@' + 'a'.repeat(300));
     await flow2.submitForm();
-    await expect(page).toHaveURL('https://talktravel.com/register');
+    await expect(page).toHaveURL('https://staging.talktravel.com/register');
   });
 
   test('negative — phone with invalid country code keeps user on register page', async ({ page }) => {
     await flow2.goToRegisterViaJoinFreeHeader();
     await flow2.fillSignupForm(`tester${Date.now()}`, '+0001234567890', 'TestPass@123');
     await flow2.submitForm();
-    await expect(page).toHaveURL('https://talktravel.com/register');
+    await expect(page).toHaveURL('https://staging.talktravel.com/register');
   });
 
   test('negative — numeric only username keeps user on register page', async ({ page }) => {
     await flow2.goToRegisterViaJoinFreeHeader();
     await flow2.fillSignupForm('1234567890', `tester${Date.now()}@example.com`, 'TestPass@123');
     await flow2.submitForm();
-    await expect(page).toHaveURL('https://talktravel.com/register');
+    await expect(page).toHaveURL('https://staging.talktravel.com/register');
   });
 
   test('negative — username with unicode characters keeps user on register page', async ({ page }) => {
     await flow2.goToRegisterViaJoinFreeHeader();
     await flow2.fillSignupForm('旅行者🌍', `tester${Date.now()}@example.com`, 'TestPass@123');
     await flow2.submitForm();
-    await expect(page).toHaveURL('https://talktravel.com/register');
+    await expect(page).toHaveURL('https://staging.talktravel.com/register');
   });
 
   test('negative — password and confirm password both empty keeps user on register page', async ({ page }) => {
@@ -399,14 +399,14 @@ test.describe('Flow 2 — Landing → Create Account', () => {
     await flow2.usernameField.fill(`tester${Date.now()}`);
     await flow2.emailPhoneField.fill(`tester${Date.now()}@example.com`);
     await flow2.submitForm();
-    await expect(page).toHaveURL('https://talktravel.com/register');
+    await expect(page).toHaveURL('https://staging.talktravel.com/register');
   });
 
   test('negative — username with leading and trailing spaces keeps user on register page', async ({ page }) => {
     await flow2.goToRegisterViaJoinFreeHeader();
     await flow2.fillSignupForm('  tester  ', `tester${Date.now()}@example.com`, 'TestPass@123');
     await flow2.submitForm();
-    await expect(page).toHaveURL('https://talktravel.com/register');
+    await expect(page).toHaveURL('https://staging.talktravel.com/register');
   });
 
   test('negative — all fields filled with whitespace keeps user on register page', async ({ page }) => {
@@ -416,7 +416,7 @@ test.describe('Flow 2 — Landing → Create Account', () => {
     await flow2.passwordField.fill('   ');
     await flow2.confirmPasswordField.fill('   ');
     await flow2.submitForm();
-    await expect(page).toHaveURL('https://talktravel.com/register');
+    await expect(page).toHaveURL('https://staging.talktravel.com/register');
   });
 
   test('negative — mismatched passwords with valid all other fields shows error', async ({ page }) => {
@@ -426,7 +426,7 @@ test.describe('Flow 2 — Landing → Create Account', () => {
     await flow2.passwordField.fill('TestPass@123');
     await flow2.confirmPasswordField.fill('Different@456');
     await flow2.submitForm();
-    await expect(page).toHaveURL('https://talktravel.com/register');
+    await expect(page).toHaveURL('https://staging.talktravel.com/register');
     await expect(flow2.confirmPasswordField).toBeVisible();
   });
 });

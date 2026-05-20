@@ -12,7 +12,7 @@ test.describe('Flow 3 — Landing → Pre-Login Feed → Single Post View', () =
   // ── Step 1: Landing page ─────────────────────────────────────────────────
 
   test('Step 1 — landing page loads at correct URL', async ({ page }) => {
-    await expect(page).toHaveURL('https://talktravel.com/');
+    await expect(page).toHaveURL('https://staging.talktravel.com/');
   });
 
   test('Step 1 — logo is visible in header', async () => {
@@ -51,7 +51,7 @@ test.describe('Flow 3 — Landing → Pre-Login Feed → Single Post View', () =
 
   test('Step 2 — Community header link navigates to /trending', async ({ page }) => {
     await flow3.goToFeedViaCommunityLink();
-    await expect(page).toHaveURL('https://talktravel.com/trending');
+    await expect(page).toHaveURL('https://staging.talktravel.com/trending');
   });
 
   test('Step 2 — Trending and Latest feed tabs are visible', async () => {
@@ -87,7 +87,7 @@ test.describe('Flow 3 — Landing → Pre-Login Feed → Single Post View', () =
   test('Step 3 — clicking a post card navigates to /post/{id}', async ({ page }) => {
     await flow3.goToFeedViaCommunityLink();
     await flow3.openFirstPostCard();
-    await expect(page).toHaveURL(/https:\/\/talktravel\.com\/post\/.+/);
+    await expect(page).toHaveURL(/https:\/\/staging\.talktravel\.com\/post\/.+/);
   });
 
   test('Step 3 — post title is visible on single post page', async () => {
@@ -143,16 +143,16 @@ test.describe('Flow 3 — Landing → Pre-Login Feed → Single Post View', () =
   // ── Full end-to-end happy path ───────────────────────────────────────────
 
   test('happy path — full flow Landing → Trending Feed → Single Post', async ({ page }) => {
-    await expect(page).toHaveURL('https://talktravel.com/');
+    await expect(page).toHaveURL('https://staging.talktravel.com/');
     await expect(flow3.heroHeading).toBeVisible();
 
     await flow3.goToFeedViaCommunityLink();
-    await expect(page).toHaveURL('https://talktravel.com/trending');
+    await expect(page).toHaveURL('https://staging.talktravel.com/trending');
     await expect(flow3.feedTabTrending).toBeVisible();
     await expect(flow3.feedPostCards.first()).toBeVisible();
 
     await flow3.openFirstPostCard();
-    await expect(page).toHaveURL(/https:\/\/talktravel\.com\/post\/.+/);
+    await expect(page).toHaveURL(/https:\/\/staging\.talktravel\.com\/post\/.+/);
     await expect(flow3.postTitle).toBeVisible();
   });
 });

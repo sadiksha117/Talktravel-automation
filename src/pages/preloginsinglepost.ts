@@ -74,7 +74,7 @@ export class PreLoginSinglePostPage extends BasePage {
   }
 
   async goToLanding(): Promise<void> {
-    await this.page.goto('https://talktravel.com/');
+    await this.page.goto('https://staging.talktravel.com/');
     await this.waitForPageLoad();
   }
 
