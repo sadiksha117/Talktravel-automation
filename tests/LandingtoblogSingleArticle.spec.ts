@@ -1,5 +1,5 @@
-import { test, expect } from '@playwright/test';
-import { Flow1Page } from '../src/pages/Flow1Page';
+import { expect, test } from '@playwright/test';
+import { Flow1Page } from '../src/pages/LandingtoblogSingleArticle';
 
 test.describe('Flow 1 — Landing → Blog → Single Article', () => {
   let flow1: Flow1Page;
@@ -81,7 +81,7 @@ test.describe('Flow 1 — Landing → Blog → Single Article', () => {
   test('Step 3 — clicking article card navigates to /blog/{slug}', async ({ page }) => {
     await flow1.goToBlogViaHeader();
     await flow1.openFirstArticle();
-    await expect(page).toHaveURL(/https:\/\/talktravel\.com\/blog\/.+/);
+    await expect(page).toHaveURL(/https:\/\/staging\.talktravel\.com\/blog\/.+/);
   });
 
   test('Step 3 — article page has an H1 title', async () => {
@@ -109,7 +109,7 @@ test.describe('Flow 1 — Landing → Blog → Single Article', () => {
     await expect(flow1.blogHeroHeading).toBeVisible();
 
     await flow1.openFirstArticle();
-    await expect(page).toHaveURL(/https:\/\/talktravel\.com\/blog\/.+/);
+    await expect(page).toHaveURL(/https:\/\/staging\.talktravel\.com\/blog\/.+/);
     await expect(flow1.articleTitle).toBeVisible();
   });
 
@@ -122,7 +122,7 @@ test.describe('Flow 1 — Landing → Blog → Single Article', () => {
     await expect(flow1.latestArticlesHeading).toBeVisible();
 
     await flow1.openFirstArticle();
-    await expect(page).toHaveURL(/https:\/\/talktravel\.com\/blog\/.+/);
+    await expect(page).toHaveURL(/https:\/\/staging\.talktravel\.com\/blog\/.+/);
     await expect(flow1.articleTitle).toBeVisible();
   });
 });
