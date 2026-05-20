@@ -49,12 +49,18 @@ test.describe('Flow 2 — Landing → Create Account', () => {
   // ── Step 2: Navigate to /register ────────────────────────────────────────
 
   test('Step 2 — Join Free header button navigates to /register', async ({ page }) => {
-    await flow2.goToRegisterViaJoinFreeHeader();
+    await Promise.all([
+      page.waitForURL('**/register'),
+      flow2.headerJoinFree.click(),
+    ]);
     await expect(page).toHaveURL('https://staging.talktravel.com/register');
   });
 
   test('Step 2 — Join the Community CTA navigates to /register', async ({ page }) => {
-    await flow2.goToRegisterViaJoinCommunityCta();
+    await Promise.all([
+      page.waitForURL('**/register'),
+      flow2.joinCommunityBtn.click(),
+    ]);
     await expect(page).toHaveURL('https://staging.talktravel.com/register');
   });
 

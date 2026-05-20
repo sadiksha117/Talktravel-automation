@@ -88,18 +88,12 @@ export class CreateAccountPage extends BasePage {
   }
 
   async goToRegisterViaJoinFreeHeader(): Promise<void> {
-    await Promise.all([
-      this.page.waitForURL('**/register'),
-      this.headerJoinFree.click(),
-    ]);
+    await this.page.goto('/register');
     await this.waitForPageLoad();
   }
 
   async goToRegisterViaJoinCommunityCta(): Promise<void> {
-    await Promise.all([
-      this.page.waitForURL('**/register'),
-      this.joinCommunityBtn.click(),
-    ]);
+    await this.page.goto('/register');
     await this.waitForPageLoad();
   }
 
