@@ -12,7 +12,7 @@ test.describe('Flow 1 — Landing → Blog → Single Article', () => {
   // ── Step 1: Landing page ─────────────────────────────────────────────────
 
   test('Step 1 — landing page loads at correct URL', async ({ page }) => {
-    await expect(page).toHaveURL('https://talktravel.com/');
+    await expect(page).toHaveURL('https://staging.talktravel.com/');
   });
 
   test('Step 1 — logo is visible in header', async () => {
@@ -68,7 +68,7 @@ test.describe('Flow 1 — Landing → Blog → Single Article', () => {
 
   test('Step 2 — clicking Read the Blog CTA goes to /blog', async ({ page }) => {
     await flow1.goToBlogViaCta();
-    await expect(page).toHaveURL('https://talktravel.com/blog');
+    await expect(page).toHaveURL('https://staging.talktravel.com/blog');
   });
 
   test('Step 2 — blog loads correctly via Read the Blog CTA', async () => {
@@ -101,11 +101,11 @@ test.describe('Flow 1 — Landing → Blog → Single Article', () => {
   // ── Full end-to-end happy path ───────────────────────────────────────────
 
   test('happy path — full flow Landing → Blog (header) → Article', async ({ page }) => {
-    await expect(page).toHaveURL('https://talktravel.com/');
+    await expect(page).toHaveURL('https://staging.talktravel.com/');
     await expect(flow1.heroHeading).toBeVisible();
 
     await flow1.goToBlogViaHeader();
-    await expect(page).toHaveURL('https://talktravel.com/blog');
+    await expect(page).toHaveURL('https://staging.talktravel.com/blog');
     await expect(flow1.blogHeroHeading).toBeVisible();
 
     await flow1.openFirstArticle();
@@ -114,11 +114,11 @@ test.describe('Flow 1 — Landing → Blog → Single Article', () => {
   });
 
   test('happy path — full flow Landing → Blog (CTA) → Article', async ({ page }) => {
-    await expect(page).toHaveURL('https://talktravel.com/');
+    await expect(page).toHaveURL('https://staging.talktravel.com/');
     await expect(flow1.readTheBlogBtn).toBeVisible();
 
     await flow1.goToBlogViaCta();
-    await expect(page).toHaveURL('https://talktravel.com/blog');
+    await expect(page).toHaveURL('https://staging.talktravel.com/blog');
     await expect(flow1.latestArticlesHeading).toBeVisible();
 
     await flow1.openFirstArticle();

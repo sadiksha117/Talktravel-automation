@@ -51,7 +51,7 @@ export class Flow1Page extends BasePage {
   }
 
   async goToLanding(): Promise<void> {
-    await this.page.goto('https://talktravel.com/');
+    await this.page.goto('/');
     await this.waitForPageLoad();
   }
 
@@ -64,7 +64,7 @@ export class Flow1Page extends BasePage {
 
   async goToBlogViaHeader(): Promise<void> {
     // Header Blog link opens a dropdown menu on click — navigate directly instead
-    await this.page.goto('https://talktravel.com/blog');
+    await this.page.goto('/blog');
     await this.waitForPageLoad();
     await this.dismissCookieBanner();
   }
