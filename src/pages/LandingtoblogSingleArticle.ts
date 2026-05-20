@@ -52,7 +52,7 @@ export class Flow1Page extends BasePage {
       has: page.locator('article'),
     }).first();
     this.blogSearchBar = page.getByPlaceholder('Search articles...');
-    this.viewAllBlogsBtn = page.getByRole('link', { name: 'View All Blogs' });
+    this.viewAllBlogsBtn = page.getByRole('link', { name: 'View All Blogs' }).first();
 
     // Single article
     this.articleTitle = page.getByRole('heading', { level: 1 });
