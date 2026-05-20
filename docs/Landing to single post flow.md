@@ -1,7 +1,7 @@
 # TalkTravel — Flow 3: Landing → Pre-Login Feed → Single Post View
 
 > **Purpose:** Reference for Playwright automation of the third pre-login flow — from the landing page to the trending feed, then opening a single post.
-> **Base URL:** `https://talktravel.com`
+> **Base URL:** `https://staging.talktravel.com/`
 > **Auth state:** Logged out
 
 ---

@@ -1,7 +1,7 @@
 # TalkTravel — Flow 2: Landing → Create Account
 
 > **Purpose:** Reference for Playwright automation of the second pre-login flow — from the landing page to successfully creating an account with email/password.
-> **Base URL:** `https://talktravel.com`
+> **Base URL:** `https://staging.talktravel.com/`
 > **Auth state:** Logged out → newly registered
 > **Signup method:** Email/password (manual form)
 

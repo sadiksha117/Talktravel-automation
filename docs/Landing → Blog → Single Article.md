@@ -1,7 +1,7 @@
 # TalkTravel — Flow: Landing → Blog → Single Article
 
 > **Purpose:** Reference for Playwright automation of one pre-login flow — from the landing page to opening a single blog article.
-> **Base URL:** `https://talktravel.com`
+> **Base URL:** `https://staging.talktravel.com/`
 > **Auth state:** Logged out
 
 ---
