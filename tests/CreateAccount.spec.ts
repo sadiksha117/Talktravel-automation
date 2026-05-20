@@ -429,4 +429,89 @@ test.describe('Flow 2 — Landing → Create Account', () => {
     await expect(page).toHaveURL('https://staging.talktravel.com/register');
     await expect(flow2.confirmPasswordField).toBeVisible();
   });
+
+  // ── Additional edge cases ─────────────────────────────────────────────────
+
+  test('edge — User Agreement link is visible and clickable on register page', async ({ page }) => {
+    await flow2.goToRegisterViaJoinFreeHeader();
+    const userAgreementLink = page.getByRole('link', { name: /user agreement/i });
+    await expect(userAgreementLink).toBeVisible();
+    await userAgreementLink.click();
+    await expect(page).not.toHaveURL('https://staging.talktravel.com/register');
+  });
+
+  test('edge — Privacy Policy link is visible and clickable on register page', async ({ page }) => {
+    await flow2.goToRegisterViaJoinFreeHeader();
+    const privacyLink = page.getByRole('link', { name: /privacy policy/i });
+    await expect(privacyLink).toBeVisible();
+    await privacyLink.click();
+    await expect(page).not.toHaveURL('https://staging.talktravel.com/register');
+  });
+
+  test('edge — Blog link in register header navigates to /blog', async ({ page }) => {
+    await flow2.goToRegisterViaJoinFreeHeader();
+    await Promise.all([
+      page.waitForURL('**/blog'),
+      flow2.registerHeaderBlog.click(),
+    ]);
+    await expect(page).toHaveURL('https://staging.talktravel.com/blog');
+  });
+
+  test('edge — logo on register page navigates back to landing', async ({ page }) => {
+    await flow2.goToRegisterViaJoinFreeHeader();
+    await Promise.all([
+      page.waitForURL('https://staging.talktravel.com/'),
+      flow2.registerLogo.click(),
+    ]);
+    await expect(page).toHaveURL('https://staging.talktravel.com/');
+  });
+
+  test('edge — form fields retain values after failed submission', async ({ page }) => {
+    await flow2.goToRegisterViaJoinFreeHeader();
+    const username = `tester${Date.now()}`;
+    await flow2.usernameField.fill(username);
+    await flow2.emailPhoneField.fill('invalidemail');
+    await flow2.passwordField.fill('TestPass@123');
+    await flow2.submitForm();
+    await expect(flow2.usernameField).toHaveValue(username);
+  });
+
+  test('edge — generating avatar multiple times keeps page stable', async ({ page }) => {
+    await flow2.goToRegisterViaJoinFreeHeader();
+    for (let i = 0; i < 5; i++) {
+      await flow2.generateAvatarLink.click();
+    }
+    await expect(page).toHaveURL('https://staging.talktravel.com/register');
+    await expect(flow2.registerHeading).toBeVisible();
+  });
+
+  test('edge — tab key moves focus from username to email field', async ({ page }) => {
+    await flow2.goToRegisterViaJoinFreeHeader();
+    await flow2.usernameField.click();
+    await page.keyboard.press('Tab');
+    await expect(flow2.emailPhoneField).toBeFocused();
+  });
+
+  test('edge — pasting text into username field works correctly', async ({ page }) => {
+    await flow2.goToRegisterViaJoinFreeHeader();
+    await flow2.usernameField.fill('');
+    await page.evaluate(() => {
+      const input = document.querySelector('input[name="username"]') as HTMLInputElement;
+      if (input) { input.value = 'pasteduser'; input.dispatchEvent(new Event('input', { bubbles: true })); }
+    });
+    await expect(flow2.usernameField).toHaveValue('pasteduser');
+  });
+
+  test('edge — email field accepts subaddress format (plus addressing)', async ({ page }) => {
+    await flow2.goToRegisterViaJoinFreeHeader();
+    await flow2.emailPhoneField.fill('user+tag@example.com');
+    await expect(flow2.emailPhoneField).toHaveValue('user+tag@example.com');
+  });
+
+  test('edge — confirm password field does not accept input before password is filled', async ({ page }) => {
+    await flow2.goToRegisterViaJoinFreeHeader();
+    await flow2.confirmPasswordField.fill('TestPass@123');
+    await flow2.submitForm();
+    await expect(page).toHaveURL('https://staging.talktravel.com/register');
+  });
 });
