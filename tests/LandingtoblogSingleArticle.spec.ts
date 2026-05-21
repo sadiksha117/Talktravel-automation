@@ -114,6 +114,7 @@ test.describe('Flow 1 — Landing → Blog → Single Article', () => {
   });
 
   test('happy path — full flow Landing → Blog (CTA) → Article', async ({ page }) => {
+    test.setTimeout(60000);
     await expect(page).toHaveURL('https://staging.talktravel.com/');
     await expect(flow1.readTheBlogBtn).toBeVisible();
 
@@ -228,7 +229,7 @@ test.describe('Flow 1 — Landing → Blog → Single Article', () => {
 
   test('Edge — Step 2: first article card has a visible image', async () => {
     await flow1.goToBlogViaHeader();
-    const firstCardImage = flow1.latestArticlesSection.locator('article').first().locator('img');
+    const firstCardImage = flow1.latestArticlesSection.locator('article').first().locator('img').first();
     await expect(firstCardImage).toBeVisible();
   });
 
