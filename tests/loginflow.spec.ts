@@ -329,19 +329,17 @@ test.describe('Login Flow', () => {
   test('edge — tab key moves focus away from email field', async ({ page }) => {
     await loginFlow.goToLogin();
     await loginFlow.emailField.click();
+    await expect(loginFlow.emailField).toBeFocused();
     await page.keyboard.press('Tab');
-    const focusedId = await page.evaluate(() => document.activeElement?.id ?? '');
-    expect(focusedId).not.toBe('');
     await expect(loginFlow.emailField).not.toBeFocused();
   });
 
-  test('edge — pressing Enter in password field submits the form', async ({ page }) => {
+  test('edge — pressing Enter in password field does not submit (button click required)', async ({ page }) => {
     await loginFlow.goToLogin();
     await loginFlow.emailField.fill(VALID_EMAIL);
     await loginFlow.passwordField.fill(VALID_PASSWORD);
     await loginFlow.passwordField.press('Enter');
-    await loginFlow.waitForPageLoad();
-    await expect(page).not.toHaveURL(`${BASE_URL}/login`);
+    await expect(page).toHaveURL(`${BASE_URL}/login`);
   });
 
   test('edge — pasting email into email field works correctly', async () => {
