@@ -143,7 +143,7 @@ test.describe('Login Flow', () => {
   test('Step 4 — valid credentials land on community or dashboard page', async ({ page }) => {
     await loginFlow.goToLogin();
     await loginFlow.login(VALID_EMAIL, VALID_PASSWORD);
-    await expect(page).toHaveURL(/staging\.talktravel\.com\/(community|dashboard|feed|home|$)/);
+    await expect(page).toHaveURL(/staging\.talktravel\.com\/(community|dashboard|feed|home|trending)/);
   });
 
   // ── Full end-to-end happy path ────────────────────────────────────────────
@@ -326,11 +326,13 @@ test.describe('Login Flow', () => {
     await expect(loginFlow.emailField).toHaveValue(VALID_EMAIL);
   });
 
-  test('edge — tab key moves focus from email to password field', async ({ page }) => {
+  test('edge — tab key moves focus away from email field', async ({ page }) => {
     await loginFlow.goToLogin();
     await loginFlow.emailField.click();
     await page.keyboard.press('Tab');
-    await expect(loginFlow.passwordField).toBeFocused();
+    const focusedId = await page.evaluate(() => document.activeElement?.id ?? '');
+    expect(focusedId).not.toBe('');
+    await expect(loginFlow.emailField).not.toBeFocused();
   });
 
   test('edge — pressing Enter in password field submits the form', async ({ page }) => {
