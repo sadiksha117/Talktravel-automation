@@ -10,49 +10,57 @@ test.describe('Login Flow', () => {
 
   test.beforeEach(async ({ page }) => {
     loginFlow = new LoginFlowPage(page);
-    await loginFlow.goToLanding();
   });
 
   // ── Step 1: Landing page ─────────────────────────────────────────────────
 
   test('Step 1 — landing page loads at correct URL', async ({ page }) => {
+    await loginFlow.goToLanding();
     await expect(page).toHaveURL(`${BASE_URL}/`);
   });
 
   test('Step 1 — logo is visible in header', async () => {
+    await loginFlow.goToLanding();
     await expect(loginFlow.logo).toBeVisible();
   });
 
   test('Step 1 — header nav links are visible', async () => {
+    await loginFlow.goToLanding();
     await expect(loginFlow.headerCommunity).toBeVisible();
     await expect(loginFlow.headerBlog).toBeVisible();
     await expect(loginFlow.headerFaq).toBeVisible();
   });
 
   test('Step 1 — Log in and Join Free buttons are visible in header', async () => {
+    await loginFlow.goToLanding();
     await expect(loginFlow.headerLogIn).toBeVisible();
     await expect(loginFlow.headerJoinFree).toBeVisible();
   });
 
   test('Step 1 — hero heading is visible', async () => {
+    await loginFlow.goToLanding();
     await expect(loginFlow.heroHeading).toBeVisible();
   });
 
   test('Step 1 — hero subtext is visible', async () => {
+    await loginFlow.goToLanding();
     await expect(loginFlow.heroSubtext).toBeVisible();
   });
 
   test('Step 1 — Join the Community CTA is visible', async () => {
+    await loginFlow.goToLanding();
     await expect(loginFlow.joinCommunityBtn).toBeVisible();
   });
 
   test('Step 1 — Read the Blog CTA is visible', async () => {
+    await loginFlow.goToLanding();
     await expect(loginFlow.readTheBlogBtn).toBeVisible();
   });
 
   // ── Step 2: Navigate to /login ────────────────────────────────────────────
 
   test('Step 2 — Log in header button navigates to /login', async ({ page }) => {
+    await loginFlow.goToLanding();
     await Promise.all([
       page.waitForURL('**/login'),
       loginFlow.headerLogIn.click(),
@@ -149,6 +157,7 @@ test.describe('Login Flow', () => {
   // ── Full end-to-end happy path ────────────────────────────────────────────
 
   test('happy path — Landing → Log in header → fill form → submit → redirected', async ({ page }) => {
+    await loginFlow.goToLanding();
     await expect(page).toHaveURL(`${BASE_URL}/`);
     await expect(loginFlow.heroHeading).toBeVisible();
 
