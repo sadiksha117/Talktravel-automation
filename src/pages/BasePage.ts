@@ -12,7 +12,7 @@ export abstract class BasePage {
   }
 
   async waitForPageLoad(): Promise<void> {
-    await this.page.waitForLoadState('networkidle');
+    await this.page.waitForLoadState('load');
   }
 
   async clickElement(selector: string): Promise<void> {
