@@ -186,4 +186,87 @@ test.describe('Flow 1 — Landing → Blog → Single Article', () => {
     const bodyText = await flow1.articleBody.innerText();
     expect(bodyText.trim().length).toBeGreaterThan(0);
   });
+
+  // ── Additional edge cases ────────────────────────────────────────────────
+
+  test('Edge — Step 1: Log in link is visible in header', async () => {
+    await expect(flow1.headerLoginBtn).toBeVisible();
+  });
+
+  test('Edge — Step 1: Join Free link is visible in header', async () => {
+    await expect(flow1.headerJoinFreeBtn).toBeVisible();
+  });
+
+  test('Edge — Step 1: Read the Blog CTA href points to /blog', async () => {
+    await expect(flow1.readTheBlogBtn).toHaveAttribute('href', '/blog');
+  });
+
+  test('Edge — Step 1: Join the Community CTA has a non-empty href', async () => {
+    await expect(flow1.joinCommunityBtn).toHaveAttribute('href', /.+/);
+  });
+
+  test('Edge — Step 2: Featured Blogs heading is visible', async () => {
+    await flow1.goToBlogViaHeader();
+    await expect(flow1.featuredBlogsHeading).toBeVisible();
+  });
+
+  test('Edge — Step 2: Featured Blogs section contains at least one article link', async () => {
+    await flow1.goToBlogViaHeader();
+    const linkCount = await flow1.featuredBlogsSection.getByRole('link').count();
+    expect(linkCount).toBeGreaterThan(0);
+  });
+
+  test('Edge — Step 2: category topics navigation is visible', async () => {
+    await flow1.goToBlogViaHeader();
+    await expect(flow1.categoryTopicsNav).toBeVisible();
+  });
+
+  test('Edge — Step 2: newsletter signup section is visible', async () => {
+    await flow1.goToBlogViaHeader();
+    await expect(flow1.newsletterHeading).toBeVisible();
+  });
+
+  test('Edge — Step 2: first article card has a visible image', async () => {
+    await flow1.goToBlogViaHeader();
+    const firstCardImage = flow1.latestArticlesSection.locator('article').first().locator('img');
+    await expect(firstCardImage).toBeVisible();
+  });
+
+  test('Edge — Step 2: first article card shows an author name', async () => {
+    await flow1.goToBlogViaHeader();
+    const firstCardAuthor = flow1.latestArticlesSection
+      .locator('article').first()
+      .locator('a[href*="/blog/author/"]');
+    await expect(firstCardAuthor).toBeVisible();
+  });
+
+  test('Edge — Step 2: first article card shows a publish date', async () => {
+    await flow1.goToBlogViaHeader();
+    const firstCardDate = flow1.latestArticlesSection.locator('article').first().locator('time');
+    await expect(firstCardDate).toBeVisible();
+  });
+
+  test('Edge — Step 2: footer is visible on blog page', async () => {
+    await flow1.goToBlogViaHeader();
+    await expect(flow1.footerElement).toBeVisible();
+  });
+
+  test('Edge — Step 3: article publish date is visible', async () => {
+    await flow1.goToBlogViaHeader();
+    await flow1.openFirstArticle();
+    await expect(flow1.articleDate).toBeVisible();
+  });
+
+  test('Edge — Step 3: Blog header link still points to /blog on article page', async () => {
+    await flow1.goToBlogViaHeader();
+    await flow1.openFirstArticle();
+    await expect(flow1.headerBlog).toHaveAttribute('href', '/blog');
+  });
+
+  test('Edge — Step 3: article H1 title text is not empty', async () => {
+    await flow1.goToBlogViaHeader();
+    await flow1.openFirstArticle();
+    const titleText = await flow1.articleTitle.innerText();
+    expect(titleText.trim().length).toBeGreaterThan(0);
+  });
 });

@@ -7,6 +7,8 @@ export class Flow1Page extends BasePage {
   readonly headerCommunity: Locator;
   readonly headerBlog: Locator;
   readonly headerFaq: Locator;
+  readonly headerLoginBtn: Locator;
+  readonly headerJoinFreeBtn: Locator;
 
   // Landing hero
   readonly heroHeading: Locator;
@@ -20,6 +22,11 @@ export class Flow1Page extends BasePage {
   readonly latestArticlesSection: Locator;
   readonly blogSearchBar: Locator;
   readonly viewAllBlogsBtn: Locator;
+  readonly featuredBlogsHeading: Locator;
+  readonly featuredBlogsSection: Locator;
+  readonly categoryTopicsNav: Locator;
+  readonly newsletterHeading: Locator;
+  readonly footerElement: Locator;
 
   // Single article
   readonly articleTitle: Locator;
@@ -27,6 +34,7 @@ export class Flow1Page extends BasePage {
   readonly articleAuthorBlock: Locator;
   readonly articleShareRow: Locator;
   readonly articleBody: Locator;
+  readonly articleDate: Locator;
 
   constructor(page: Page) {
     super(page);
@@ -36,6 +44,8 @@ export class Flow1Page extends BasePage {
     this.headerCommunity = page.getByRole('link', { name: 'Community', exact: true });
     this.headerBlog = page.getByRole('link', { name: 'Blog', exact: true });
     this.headerFaq = page.getByRole('navigation').getByRole('link', { name: 'FAQ' });
+    this.headerLoginBtn = page.getByRole('navigation').getByRole('link', { name: 'Log in' });
+    this.headerJoinFreeBtn = page.getByRole('navigation').getByRole('link', { name: 'Join Free' });
 
     // Landing hero
     this.heroHeading = page.getByRole('heading', { name: 'A travel community for people' });
@@ -53,6 +63,15 @@ export class Flow1Page extends BasePage {
     }).first();
     this.blogSearchBar = page.getByPlaceholder('Search articles...');
     this.viewAllBlogsBtn = page.getByRole('link', { name: 'View All Blogs' }).first();
+    this.featuredBlogsHeading = page.getByRole('heading', { name: 'Featured Blogs', level: 2 });
+    this.featuredBlogsSection = page.locator('div').filter({
+      has: page.getByRole('heading', { name: 'Featured Blogs', level: 2 }),
+    }).first();
+    this.categoryTopicsNav = page.getByRole('navigation').filter({
+      has: page.getByRole('link', { name: 'Airlines', exact: true }),
+    });
+    this.newsletterHeading = page.getByRole('heading', { name: 'Stay in the know' });
+    this.footerElement = page.getByRole('contentinfo');
 
     // Single article
     this.articleTitle = page.getByRole('heading', { level: 1 });
@@ -60,6 +79,7 @@ export class Flow1Page extends BasePage {
     this.articleAuthorBlock = page.getByText(/Written by/);
     this.articleShareRow = page.locator('[class*="share"]').first();
     this.articleBody = page.locator('article').first();
+    this.articleDate = page.locator('time').first();
   }
 
   async goToLanding(): Promise<void> {
