@@ -12,6 +12,7 @@ export class Flow1Page extends BasePage {
 
   // Landing hero
   readonly heroHeading: Locator;
+  readonly heroSubtext: Locator;
   readonly joinCommunityBtn: Locator;
   readonly readTheBlogBtn: Locator;
 
@@ -26,6 +27,10 @@ export class Flow1Page extends BasePage {
   readonly featuredBlogsSection: Locator;
   readonly categoryTopicsNav: Locator;
   readonly newsletterHeading: Locator;
+  readonly newsletterEmailInput: Locator;
+  readonly newsletterSubscribeBtn: Locator;
+  readonly contributorsHeading: Locator;
+  readonly blogSearchBtn: Locator;
   readonly footerElement: Locator;
 
   // Single article
@@ -49,6 +54,7 @@ export class Flow1Page extends BasePage {
 
     // Landing hero
     this.heroHeading = page.getByRole('heading', { name: 'A travel community for people' });
+    this.heroSubtext = page.getByText(/Real tips from real travelers/);
     this.joinCommunityBtn = page.getByRole('link', { name: 'Join the Community' });
     this.readTheBlogBtn = page.getByRole('link', { name: 'Read the Blog' });
 
@@ -71,6 +77,10 @@ export class Flow1Page extends BasePage {
       has: page.getByRole('link', { name: 'Airlines', exact: true }),
     });
     this.newsletterHeading = page.getByRole('heading', { name: 'Stay in the know' });
+    this.newsletterEmailInput = page.getByPlaceholder('Enter your email');
+    this.newsletterSubscribeBtn = page.getByRole('button', { name: 'Subscribe' });
+    this.contributorsHeading = page.getByRole('heading', { name: 'Our Contributors' });
+    this.blogSearchBtn = page.getByRole('button', { name: 'Search' });
     this.footerElement = page.getByRole('contentinfo');
 
     // Single article

@@ -270,4 +270,85 @@ test.describe('Flow 1 — Landing → Blog → Single Article', () => {
     const titleText = await flow1.articleTitle.innerText();
     expect(titleText.trim().length).toBeGreaterThan(0);
   });
+
+  // ── Further edge cases ───────────────────────────────────────────────────
+
+  test('Edge — Step 1: hero subtext is visible', async () => {
+    await expect(flow1.heroSubtext).toBeVisible();
+  });
+
+  test('Edge — Step 1: Community header link points to /trending', async () => {
+    await expect(flow1.headerCommunity).toHaveAttribute('href', '/trending');
+  });
+
+  test('Edge — Step 1: FAQ header link points to /faq', async () => {
+    await expect(flow1.headerFaq).toHaveAttribute('href', '/faq');
+  });
+
+  test('Edge — Step 1: Log in link points to /login', async () => {
+    await expect(flow1.headerLoginBtn).toHaveAttribute('href', '/login');
+  });
+
+  test('Edge — Step 1: Join Free link points to /register', async () => {
+    await expect(flow1.headerJoinFreeBtn).toHaveAttribute('href', '/register');
+  });
+
+  test('Edge — Step 2: View All Blogs link href contains view=latest', async () => {
+    await flow1.goToBlogViaHeader();
+    await expect(flow1.viewAllBlogsBtn).toHaveAttribute('href', /view=latest/);
+  });
+
+  test('Edge — Step 2: blog search submit button is visible', async () => {
+    await flow1.goToBlogViaHeader();
+    await expect(flow1.blogSearchBtn).toBeVisible();
+  });
+
+  test('Edge — Step 2: newsletter email input is visible', async () => {
+    await flow1.goToBlogViaHeader();
+    await expect(flow1.newsletterEmailInput).toBeVisible();
+  });
+
+  test('Edge — Step 2: newsletter subscribe button is visible', async () => {
+    await flow1.goToBlogViaHeader();
+    await expect(flow1.newsletterSubscribeBtn).toBeVisible();
+  });
+
+  test('Edge — Step 2: Our Contributors section is visible', async () => {
+    await flow1.goToBlogViaHeader();
+    await expect(flow1.contributorsHeading).toBeVisible();
+  });
+
+  test('Edge — Step 2: category nav contains Airlines link', async () => {
+    await flow1.goToBlogViaHeader();
+    await expect(flow1.categoryTopicsNav.getByRole('link', { name: 'Airlines', exact: true })).toBeVisible();
+  });
+
+  test('Edge — Step 3: article URL slug contains no spaces', async ({ page }) => {
+    await flow1.goToBlogViaHeader();
+    await flow1.openFirstArticle();
+    expect(page.url()).not.toContain(' ');
+  });
+
+  test('Edge — Step 3: footer is visible on article page', async () => {
+    await flow1.goToBlogViaHeader();
+    await flow1.openFirstArticle();
+    await expect(flow1.footerElement).toBeVisible();
+  });
+
+  test('Edge — Step 3: Log in and Join Free links persist on article page', async () => {
+    await flow1.goToBlogViaHeader();
+    await flow1.openFirstArticle();
+    await expect(flow1.headerLoginBtn).toBeVisible();
+    await expect(flow1.headerJoinFreeBtn).toBeVisible();
+  });
+
+  test('Edge — Step 3: article title on page matches title clicked on blog listing', async () => {
+    await flow1.goToBlogViaHeader();
+    const cardTitle = await flow1.latestArticlesSection
+      .locator('article').first()
+      .getByRole('heading', { level: 3 })
+      .innerText();
+    await flow1.openFirstArticle();
+    await expect(flow1.articleTitle).toHaveText(cardTitle);
+  });
 });
