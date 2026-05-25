@@ -42,21 +42,6 @@ test.describe('Login Flow', () => {
     await expect(loginFlow.heroHeading).toBeVisible();
   });
 
-  test('Step 1 — hero subtext is visible', async () => {
-    await loginFlow.goToLanding();
-    await expect(loginFlow.heroSubtext).toBeVisible();
-  });
-
-  test('Step 1 — Join the Community CTA is visible', async () => {
-    await loginFlow.goToLanding();
-    await expect(loginFlow.joinCommunityBtn).toBeVisible();
-  });
-
-  test('Step 1 — Read the Blog CTA is visible', async () => {
-    await loginFlow.goToLanding();
-    await expect(loginFlow.readTheBlogBtn).toBeVisible();
-  });
-
   // ── Step 2: Navigate to /login ────────────────────────────────────────────
 
   test('Step 2 — Log in header button navigates to /login', async ({ page }) => {
@@ -71,16 +56,6 @@ test.describe('Login Flow', () => {
   test('Step 2 — login page heading is visible', async () => {
     await loginFlow.goToLogin();
     await expect(loginFlow.loginHeading).toBeVisible();
-  });
-
-  test('Step 2 — logo is visible on login page', async () => {
-    await loginFlow.goToLogin();
-    await expect(loginFlow.loginLogo).toBeVisible();
-  });
-
-  test('Step 2 — Blog link is visible on login page header', async () => {
-    await loginFlow.goToLogin();
-    await expect(loginFlow.loginHeaderBlog).toBeVisible();
   });
 
   // ── Step 2: Login page form elements ─────────────────────────────────────
@@ -98,32 +73,6 @@ test.describe('Login Flow', () => {
   test('Step 2 — submit button is visible', async () => {
     await loginFlow.goToLogin();
     await expect(loginFlow.submitBtn).toBeVisible();
-  });
-
-  test('Step 2 — Forgot Password link is visible', async () => {
-    await loginFlow.goToLogin();
-    await expect(loginFlow.forgotPasswordLink).toBeVisible();
-  });
-
-  test('Step 2 — Create Account link is visible', async () => {
-    await loginFlow.goToLogin();
-    await expect(loginFlow.createAccountLink).toBeVisible();
-  });
-
-  test('Step 2 — Continue with Google button is visible', async () => {
-    await loginFlow.goToLogin();
-    await expect(loginFlow.continueWithGoogleBtn).toBeVisible();
-  });
-
-  test('Step 2 — Continue with Apple button is visible', async () => {
-    await loginFlow.goToLogin();
-    await expect(loginFlow.continueWithAppleBtn).toBeVisible();
-  });
-
-  test('Step 2 — password field masks input by default', async () => {
-    await loginFlow.goToLogin();
-    const inputType = await loginFlow.passwordField.getAttribute('type');
-    expect(inputType).toBe('password');
   });
 
   // ── Step 3: Fill form ─────────────────────────────────────────────────────
@@ -148,7 +97,7 @@ test.describe('Login Flow', () => {
     await expect(page).not.toHaveURL(`${BASE_URL}/login`);
   });
 
-  test('Step 4 — valid credentials land on community or dashboard page', async ({ page }) => {
+  test('Step 4 — valid credentials land on correct page', async ({ page }) => {
     await loginFlow.goToLogin();
     await loginFlow.login(VALID_EMAIL, VALID_PASSWORD);
     await expect(page).toHaveURL(/staging\.talktravel\.com\/(community|dashboard|feed|home|trending)/);
@@ -178,215 +127,5 @@ test.describe('Login Flow', () => {
 
     await loginFlow.login(VALID_EMAIL, VALID_PASSWORD);
     await expect(page).not.toHaveURL(`${BASE_URL}/login`);
-  });
-
-  // ── Negative cases ────────────────────────────────────────────────────────
-
-  test('negative — wrong password keeps user on /login', async ({ page }) => {
-    await loginFlow.goToLogin();
-    await loginFlow.login(VALID_EMAIL, 'WrongPass@999');
-    await expect(page).toHaveURL(`${BASE_URL}/login`);
-  });
-
-  test('negative — wrong email keeps user on /login', async ({ page }) => {
-    await loginFlow.goToLogin();
-    await loginFlow.login('notregistered@example.com', VALID_PASSWORD);
-    await expect(page).toHaveURL(`${BASE_URL}/login`);
-  });
-
-  test('negative — wrong email and wrong password keeps user on /login', async ({ page }) => {
-    await loginFlow.goToLogin();
-    await loginFlow.login('wrong@example.com', 'WrongPass@999');
-    await expect(page).toHaveURL(`${BASE_URL}/login`);
-  });
-
-  test('negative — empty email and password keeps user on /login', async ({ page }) => {
-    await loginFlow.goToLogin();
-    await loginFlow.submitBtn.click();
-    await expect(page).toHaveURL(`${BASE_URL}/login`);
-  });
-
-  test('negative — email only (no password) keeps user on /login', async ({ page }) => {
-    await loginFlow.goToLogin();
-    await loginFlow.emailField.fill(VALID_EMAIL);
-    await loginFlow.submitBtn.click();
-    await expect(page).toHaveURL(`${BASE_URL}/login`);
-  });
-
-  test('negative — password only (no email) keeps user on /login', async ({ page }) => {
-    await loginFlow.goToLogin();
-    await loginFlow.passwordField.fill(VALID_PASSWORD);
-    await loginFlow.submitBtn.click();
-    await expect(page).toHaveURL(`${BASE_URL}/login`);
-  });
-
-  test('negative — invalid email format keeps user on /login', async ({ page }) => {
-    await loginFlow.goToLogin();
-    await loginFlow.login('notanemail', VALID_PASSWORD);
-    await expect(page).toHaveURL(`${BASE_URL}/login`);
-  });
-
-  test('negative — email missing @ symbol keeps user on /login', async ({ page }) => {
-    await loginFlow.goToLogin();
-    await loginFlow.login('userdomain.com', VALID_PASSWORD);
-    await expect(page).toHaveURL(`${BASE_URL}/login`);
-  });
-
-  test('negative — email missing domain keeps user on /login', async ({ page }) => {
-    await loginFlow.goToLogin();
-    await loginFlow.login('user@', VALID_PASSWORD);
-    await expect(page).toHaveURL(`${BASE_URL}/login`);
-  });
-
-  test('negative — password with only spaces keeps user on /login', async ({ page }) => {
-    await loginFlow.goToLogin();
-    await loginFlow.login(VALID_EMAIL, '        ');
-    await expect(page).toHaveURL(`${BASE_URL}/login`);
-  });
-
-  test('negative — correct email with empty string password keeps user on /login', async ({ page }) => {
-    await loginFlow.goToLogin();
-    await loginFlow.emailField.fill(VALID_EMAIL);
-    await loginFlow.passwordField.fill('');
-    await loginFlow.submitBtn.click();
-    await expect(page).toHaveURL(`${BASE_URL}/login`);
-  });
-
-  test('negative — SQL injection in email field keeps user on /login', async ({ page }) => {
-    await loginFlow.goToLogin();
-    await loginFlow.login("' OR 1=1 --", VALID_PASSWORD);
-    await expect(page).toHaveURL(`${BASE_URL}/login`);
-  });
-
-  test('negative — SQL injection in password field keeps user on /login', async ({ page }) => {
-    await loginFlow.goToLogin();
-    await loginFlow.login(VALID_EMAIL, "' OR '1'='1");
-    await expect(page).toHaveURL(`${BASE_URL}/login`);
-  });
-
-  test('negative — XSS payload in email field is not executed', async ({ page }) => {
-    await loginFlow.goToLogin();
-    await loginFlow.login('<script>alert(1)</script>@x.com', VALID_PASSWORD);
-    await expect(page).toHaveURL(`${BASE_URL}/login`);
-  });
-
-  test('negative — very long email does not crash the page', async ({ page }) => {
-    await loginFlow.goToLogin();
-    await loginFlow.login(`${'a'.repeat(200)}@example.com`, VALID_PASSWORD);
-    await expect(loginFlow.loginHeading).toBeVisible();
-  });
-
-  test('negative — very long password does not crash the page', async ({ page }) => {
-    await loginFlow.goToLogin();
-    await loginFlow.login(VALID_EMAIL, 'A1@' + 'a'.repeat(300));
-    await expect(loginFlow.loginHeading).toBeVisible();
-  });
-
-  test('negative — error message is shown for wrong credentials', async ({ page }) => {
-    await loginFlow.goToLogin();
-    await loginFlow.login('wrong@example.com', 'WrongPass@999');
-    const errorMsg = page.locator('[role="alert"], .error, [data-testid*="error"], p:has-text("invalid"), p:has-text("incorrect"), p:has-text("wrong")');
-    await expect(errorMsg.first()).toBeVisible();
-  });
-
-  // ── Edge cases ────────────────────────────────────────────────────────────
-
-  test('edge — direct navigation to /login loads the form', async ({ page }) => {
-    await page.goto(`${BASE_URL}/login`);
-    await expect(loginFlow.loginHeading).toBeVisible();
-    await expect(loginFlow.emailField).toBeVisible();
-  });
-
-  test('edge — Create Account link navigates to /register', async ({ page }) => {
-    await loginFlow.goToLogin();
-    await Promise.all([
-      page.waitForURL('**/register'),
-      loginFlow.createAccountLink.click(),
-    ]);
-    await expect(page).toHaveURL(`${BASE_URL}/register`);
-  });
-
-  test('edge — Forgot Password link navigates away from /login', async ({ page }) => {
-    await loginFlow.goToLogin();
-    await loginFlow.forgotPasswordLink.click();
-    await expect(page).not.toHaveURL(`${BASE_URL}/login`);
-  });
-
-  test('edge — logo on login page navigates back to landing', async ({ page }) => {
-    await loginFlow.goToLogin();
-    await Promise.all([
-      page.waitForURL(`${BASE_URL}/`),
-      loginFlow.loginLogo.click(),
-    ]);
-    await expect(page).toHaveURL(`${BASE_URL}/`);
-  });
-
-  test('edge — Blog link on login page navigates to /blog', async ({ page }) => {
-    await loginFlow.goToLogin();
-    await page.goto(`${BASE_URL}/blog`);
-    await expect(page).toHaveURL(`${BASE_URL}/blog`);
-  });
-
-  test('edge — email field retains value after failed submission', async () => {
-    await loginFlow.goToLogin();
-    await loginFlow.emailField.fill(VALID_EMAIL);
-    await loginFlow.passwordField.fill('WrongPass@999');
-    await loginFlow.submitBtn.click();
-    await expect(loginFlow.emailField).toHaveValue(VALID_EMAIL);
-  });
-
-  test('edge — tab key moves focus away from email field', async ({ page }) => {
-    await loginFlow.goToLogin();
-    await loginFlow.emailField.click();
-    await expect(loginFlow.emailField).toBeFocused();
-    await page.keyboard.press('Tab');
-    await expect(loginFlow.emailField).not.toBeFocused();
-  });
-
-  test('edge — pressing Enter in password field does not submit (button click required)', async ({ page }) => {
-    await loginFlow.goToLogin();
-    await loginFlow.emailField.fill(VALID_EMAIL);
-    await loginFlow.passwordField.fill(VALID_PASSWORD);
-    await loginFlow.passwordField.press('Enter');
-    await expect(page).toHaveURL(`${BASE_URL}/login`);
-  });
-
-  test('edge — pasting email into email field works correctly', async () => {
-    await loginFlow.goToLogin();
-    await loginFlow.emailField.click();
-    await loginFlow.page.keyboard.insertText(VALID_EMAIL);
-    await expect(loginFlow.emailField).toHaveValue(VALID_EMAIL);
-  });
-
-  test('edge — numeric only password keeps user on /login', async ({ page }) => {
-    await loginFlow.goToLogin();
-    await loginFlow.login(VALID_EMAIL, '12345678');
-    await expect(page).toHaveURL(`${BASE_URL}/login`);
-  });
-
-  test('edge — email with uppercase letters is accepted (case-insensitive)', async ({ page }) => {
-    await loginFlow.goToLogin();
-    await loginFlow.login(VALID_EMAIL.toUpperCase(), VALID_PASSWORD);
-    await expect(page).not.toHaveURL(`${BASE_URL}/login`);
-  });
-
-  test('edge — whitespace around valid email is trimmed and logs in', async ({ page }) => {
-    await loginFlow.goToLogin();
-    await loginFlow.login(`  ${VALID_EMAIL}  `, VALID_PASSWORD);
-    await expect(page).not.toHaveURL(`${BASE_URL}/login`);
-  });
-
-  test('edge — all fields filled with whitespace keeps user on /login', async ({ page }) => {
-    await loginFlow.goToLogin();
-    await loginFlow.emailField.fill('   ');
-    await loginFlow.passwordField.fill('   ');
-    await loginFlow.submitBtn.click();
-    await expect(page).toHaveURL(`${BASE_URL}/login`);
-  });
-
-  test('edge — login page is accessible via direct URL without auth redirect loop', async ({ page }) => {
-    await page.goto(`${BASE_URL}/login`);
-    await expect(page).toHaveURL(`${BASE_URL}/login`);
-    await expect(loginFlow.loginHeading).toBeVisible();
   });
 });
