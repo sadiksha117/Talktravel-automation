@@ -7,12 +7,9 @@ export class Flow1Page extends BasePage {
   readonly headerCommunity: Locator;
   readonly headerBlog: Locator;
   readonly headerFaq: Locator;
-  readonly headerLoginBtn: Locator;
-  readonly headerJoinFreeBtn: Locator;
 
   // Landing hero
   readonly heroHeading: Locator;
-  readonly heroSubtext: Locator;
   readonly joinCommunityBtn: Locator;
   readonly readTheBlogBtn: Locator;
 
@@ -21,25 +18,9 @@ export class Flow1Page extends BasePage {
   readonly blogHeroText: Locator;
   readonly latestArticlesHeading: Locator;
   readonly latestArticlesSection: Locator;
-  readonly blogSearchBar: Locator;
-  readonly viewAllBlogsBtn: Locator;
-  readonly featuredBlogsHeading: Locator;
-  readonly featuredBlogsSection: Locator;
-  readonly categoryTopicsNav: Locator;
-  readonly newsletterHeading: Locator;
-  readonly newsletterEmailInput: Locator;
-  readonly newsletterSubscribeBtn: Locator;
-  readonly contributorsHeading: Locator;
-  readonly blogSearchBtn: Locator;
-  readonly footerElement: Locator;
 
   // Single article
   readonly articleTitle: Locator;
-  readonly articleBreadcrumb: Locator;
-  readonly articleAuthorBlock: Locator;
-  readonly articleShareRow: Locator;
-  readonly articleBody: Locator;
-  readonly articleDate: Locator;
 
   constructor(page: Page) {
     super(page);
@@ -49,16 +30,13 @@ export class Flow1Page extends BasePage {
     this.headerCommunity = page.getByRole('link', { name: 'Community', exact: true });
     this.headerBlog = page.getByRole('link', { name: 'Blog', exact: true });
     this.headerFaq = page.getByRole('navigation').getByRole('link', { name: 'FAQ' });
-    this.headerLoginBtn = page.getByRole('navigation').getByRole('link', { name: 'Log in' });
-    this.headerJoinFreeBtn = page.getByRole('navigation').getByRole('link', { name: 'Join Free' });
 
     // Landing hero
     this.heroHeading = page.getByRole('heading', { name: 'A travel community for people' });
-    this.heroSubtext = page.getByText(/Real tips from real travelers/);
     this.joinCommunityBtn = page.getByRole('link', { name: 'Join the Community' });
     this.readTheBlogBtn = page.getByRole('link', { name: 'Read the Blog' });
 
-    // Blog index — scope to div containing the h2 AND article elements
+    // Blog index
     this.blogHeroHeading = page.getByRole('heading', { name: 'Stories, tips & ideas from' });
     this.blogHeroText = page.getByText('from the travel community.');
     this.latestArticlesHeading = page.getByRole('heading', { name: 'Latest Articles', level: 2 });
@@ -67,29 +45,9 @@ export class Flow1Page extends BasePage {
     }).filter({
       has: page.locator('article'),
     }).first();
-    this.blogSearchBar = page.getByPlaceholder('Search articles...');
-    this.viewAllBlogsBtn = page.getByRole('link', { name: 'View All Blogs' }).first();
-    this.featuredBlogsHeading = page.getByRole('heading', { name: 'Featured Blogs', level: 2 });
-    this.featuredBlogsSection = page.locator('div').filter({
-      has: page.getByRole('heading', { name: 'Featured Blogs', level: 2 }),
-    }).first();
-    this.categoryTopicsNav = page.getByRole('navigation').filter({
-      has: page.getByRole('link', { name: 'Airlines', exact: true }),
-    });
-    this.newsletterHeading = page.getByRole('heading', { name: 'Stay in the know' });
-    this.newsletterEmailInput = page.getByPlaceholder('Enter your email');
-    this.newsletterSubscribeBtn = page.getByRole('button', { name: 'Subscribe' });
-    this.contributorsHeading = page.getByRole('heading', { name: 'Our Contributors' });
-    this.blogSearchBtn = page.getByRole('button', { name: 'Search' });
-    this.footerElement = page.getByRole('contentinfo');
 
     // Single article
     this.articleTitle = page.getByRole('heading', { level: 1 });
-    this.articleBreadcrumb = page.locator('[class*="breadcrumb"]').first();
-    this.articleAuthorBlock = page.getByText(/Written by/);
-    this.articleShareRow = page.locator('[class*="share"]').first();
-    this.articleBody = page.locator('article').first();
-    this.articleDate = page.locator('time').first();
   }
 
   async goToLanding(): Promise<void> {
