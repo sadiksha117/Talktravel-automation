@@ -55,12 +55,9 @@ export class HomepageLandingFlowPage extends BasePage {
     this.viewSwitchMenuBtn = page.locator('[aria-haspopup="menu"], [aria-haspopup="true"]').first().or(
       page.locator('button[aria-label*="view" i], button[aria-label*="layout" i], button[aria-label*="display" i]')
     ).first();
-    this.cardViewToggle = page.getByRole('menuitem', { name: 'Card' }).or(
-      page.locator('[role="option"]:has-text("Card"), li:has-text("Card")').first()
-    );
-    this.compactViewToggle = page.getByRole('menuitem', { name: 'Compact' }).or(
-      page.locator('[role="option"]:has-text("Compact"), li:has-text("Compact")').first()
-    );
+    // Dropdown items have no ARIA role — match by visible text inside the open dropdown
+    this.cardViewToggle = page.getByText('Card', { exact: true });
+    this.compactViewToggle = page.getByText('Compact', { exact: true });
 
     // Feed cards — anchor elements wrapping post content (has(div) excludes sidebar links)
     this.feedPostCards = page.locator('a[href^="/post/"]:has(div)');
