@@ -62,19 +62,19 @@ test.describe('Homepage / Trending Landing Flow (Pre-Login) — Happy Path', () 
     await expect(flow.feedPostCards.first()).toBeVisible();
   });
 
-  // ── Step 3 — Toggle view mode (Card → Compact) ───────────────────────────
-  // fixme: Card/Compact view toggle not found on staging — confirm selector with engineering
+  // ── Step 3 — Switch view mode (Card → Compact) ───────────────────────────
+  // The ≡ icon button opens a dropdown; Card/Compact are menuitem options inside it.
 
-  test.fixme('Step 3 — Compact view toggle is visible', async () => {
-    await expect(flow.compactViewToggle).toBeVisible();
+  test('Step 3 — view switch menu button is visible', async () => {
+    await expect(flow.viewSwitchMenuBtn).toBeVisible();
   });
 
-  test.fixme('Step 3 — clicking Compact view toggle re-renders feed', async () => {
+  test('Step 3 — clicking Compact option in view dropdown re-renders feed', async () => {
     await flow.switchToCompactView();
     await expect(flow.feedPostCards.first()).toBeVisible();
   });
 
-  test.fixme('Step 3 — switching back to Card view shows post cards', async () => {
+  test('Step 3 — switching back to Card option shows post cards', async () => {
     await flow.switchToCompactView();
     await flow.switchToCardView();
     await expect(flow.feedPostCards.first()).toBeVisible();
@@ -148,7 +148,7 @@ test.describe('Homepage / Trending Landing Flow (Pre-Login) — Happy Path', () 
 
   // ── Full end-to-end happy path ───────────────────────────────────────────
 
-  test('Full happy path — land → switch tab → click post → back to homepage', async ({ page }) => {
+  test('Full happy path — land → switch tab → switch view → click post → back to homepage', async ({ page }) => {
     // Step 1 — verify landing
     await expect(page).toHaveURL(/\/trending$/);
     await expect(flow.feedTabTrending).toBeVisible();
@@ -157,6 +157,10 @@ test.describe('Homepage / Trending Landing Flow (Pre-Login) — Happy Path', () 
     // Step 2 — switch to Latest tab
     await flow.switchToLatestTab();
     await expect(flow.feedTabLatest).toBeVisible();
+    await expect(flow.feedPostCards.first()).toBeVisible();
+
+    // Step 3 — switch to Compact view via dropdown
+    await flow.switchToCompactView();
     await expect(flow.feedPostCards.first()).toBeVisible();
 
     // Step 5 — click first post card

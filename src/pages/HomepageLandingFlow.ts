@@ -13,8 +13,10 @@ export class HomepageLandingFlowPage extends BasePage {
   // Feed tabs
   readonly feedTabTrending: Locator;
   readonly feedTabLatest: Locator;
+  readonly feedTabForYou: Locator;
 
-  // View toggles
+  // View switch — ≡ icon button opens a dropdown with Card / Compact menu items
+  readonly viewSwitchMenuBtn: Locator;
   readonly cardViewToggle: Locator;
   readonly compactViewToggle: Locator;
 
@@ -45,14 +47,20 @@ export class HomepageLandingFlowPage extends BasePage {
     // Feed tabs
     this.feedTabTrending = page.getByRole('link', { name: 'Trending', exact: true });
     this.feedTabLatest = page.getByRole('link', { name: 'Latest', exact: true });
+    this.feedTabForYou = page.getByRole('link', { name: 'For You', exact: true });
 
-    // View toggles — may be <a> links or <button> elements with various aria-labels / data-testids
-    this.cardViewToggle = page.locator(
-      '[data-testid="view-card"], [aria-label="Card view"], [aria-label="Card"], a:has-text("Card"), button:has-text("Card")'
+    // View switch — clicking the ≡ icon button opens a dropdown; Card/Compact are inside it.
+    // Items are only added to the DOM after the dropdown is opened, so we must click the
+    // trigger first before interacting with cardViewToggle / compactViewToggle.
+    this.viewSwitchMenuBtn = page.locator('[aria-haspopup="menu"], [aria-haspopup="true"]').first().or(
+      page.locator('button[aria-label*="view" i], button[aria-label*="layout" i], button[aria-label*="display" i]')
     ).first();
-    this.compactViewToggle = page.locator(
-      '[data-testid="view-compact"], [aria-label="Compact view"], [aria-label="Compact"], a:has-text("Compact"), button:has-text("Compact")'
-    ).first();
+    this.cardViewToggle = page.getByRole('menuitem', { name: 'Card' }).or(
+      page.locator('[role="option"]:has-text("Card"), li:has-text("Card")').first()
+    );
+    this.compactViewToggle = page.getByRole('menuitem', { name: 'Compact' }).or(
+      page.locator('[role="option"]:has-text("Compact"), li:has-text("Compact")').first()
+    );
 
     // Feed cards — anchor elements wrapping post content (has(div) excludes sidebar links)
     this.feedPostCards = page.locator('a[href^="/post/"]:has(div)');
@@ -93,11 +101,15 @@ export class HomepageLandingFlowPage extends BasePage {
   }
 
   async switchToCompactView(): Promise<void> {
+    await this.viewSwitchMenuBtn.click();
+    await this.compactViewToggle.waitFor({ state: 'visible' });
     await this.compactViewToggle.click();
     await this.waitForPageLoad();
   }
 
   async switchToCardView(): Promise<void> {
+    await this.viewSwitchMenuBtn.click();
+    await this.cardViewToggle.waitFor({ state: 'visible' });
     await this.cardViewToggle.click();
     await this.waitForPageLoad();
   }
