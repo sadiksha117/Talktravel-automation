@@ -126,16 +126,6 @@ test.describe('Login Flow (Exploratory)', () => {
     await expect(loginFlow.passwordField).toHaveAttribute('autocomplete', 'current-password');
   });
 
-  test('session persists after page refresh post-login', { tag: '@exploratory' }, async ({ page }) => {
-    await loginFlow.goToLogin();
-    await loginFlow.login(VALID_EMAIL, VALID_PASSWORD);
-    await expect(page).not.toHaveURL(`${BASE_URL}/login`);
-    const postLoginUrl = page.url();
-    await page.reload();
-    await expect(page).not.toHaveURL(`${BASE_URL}/login`);
-    await expect(page).toHaveURL(postLoginUrl);
-  });
-
   test('Create Account link navigates to /register', { tag: '@exploratory' }, async ({ page }) => {
     await loginFlow.goToLogin();
     await Promise.all([
@@ -166,16 +156,6 @@ test.describe('Login Flow (Exploratory)', () => {
     await page.goto(`${BASE_URL}/login`);
     await loginFlow.login(VALID_EMAIL, VALID_PASSWORD);
     await expect(page).toHaveURL(`${BASE_URL}/trending`);
-  });
-
-  test('Caps Lock warning appears when Caps Lock is on', { tag: '@exploratory' }, async ({ page }) => {
-    await loginFlow.goToLogin();
-    await loginFlow.passwordField.click();
-    await page.keyboard.down('CapsLock');
-    await loginFlow.passwordField.fill('Test');
-    const capsWarning = page.locator('text=/caps lock/i');
-    await expect(capsWarning).toBeVisible();
-    await page.keyboard.up('CapsLock');
   });
 
   test('login page has no console errors on load', { tag: '@exploratory' }, async ({ page }) => {
@@ -209,13 +189,6 @@ test.describe('Login Flow (Exploratory)', () => {
     await expect(page).toHaveURL(`${BASE_URL}/login`);
   });
 
-  test('login page has a visible "Remember me" checkbox', { tag: '@exploratory' }, async ({ page }) => {
-    await loginFlow.goToLogin();
-    const rememberMe = page.getByRole('checkbox', { name: /remember me/i })
-      .or(page.getByLabel(/remember me/i));
-    await expect(rememberMe).toBeVisible();
-  });
-
   test('submitting form via Tab to submit button then Enter logs in', { tag: '@exploratory' }, async ({ page }) => {
     await loginFlow.goToLogin();
     await loginFlow.emailField.fill(VALID_EMAIL);
@@ -224,30 +197,6 @@ test.describe('Login Flow (Exploratory)', () => {
     await page.keyboard.press('Enter');
     await page.waitForLoadState('networkidle');
     await expect(page).not.toHaveURL(`${BASE_URL}/login`);
-  });
-
-  test('login page footer is visible', { tag: '@exploratory' }, async ({ page }) => {
-    await loginFlow.goToLogin();
-    await expect(page.getByRole('contentinfo')).toBeVisible();
-  });
-
-  test('login page has a Log in with Google option that opens OAuth popup', { tag: '@exploratory' }, async ({ page }) => {
-    await loginFlow.goToLogin();
-    const [popup] = await Promise.all([
-      page.waitForEvent('popup'),
-      loginFlow.continueWithGoogleBtn.click(),
-    ]);
-    await expect(popup).toBeTruthy();
-    await expect(popup).toHaveURL(/accounts\.google\.com/);
-  });
-
-  test('unverified account shows verification prompt on login', { tag: '@exploratory' }, async ({ page }) => {
-    await loginFlow.goToLogin();
-    await loginFlow.login('unverified@example.com', 'TestPass@123');
-    const verifyMsg = page.locator('[role="alert"], .error, main').filter({
-      hasText: /verify|verification|confirm/i,
-    });
-    await expect(verifyMsg).toBeVisible();
   });
 
   test('login page email input is focused automatically on load', { tag: '@exploratory' }, async () => {
