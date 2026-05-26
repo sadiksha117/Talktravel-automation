@@ -73,7 +73,7 @@ test.describe('Login Flow (Exploratory)', () => {
 
   // ── Potentially failing cases ─────────────────────────────────────────────
 
-  test('Fail? — password toggle reveals password text on click', { tag: '@exploratory' }, async () => {
+  test('password toggle reveals password text on click', { tag: '@exploratory' }, async () => {
     await loginFlow.goToLogin();
     await loginFlow.passwordField.fill(VALID_PASSWORD);
     await expect(loginFlow.passwordToggle).toBeVisible({ timeout: 5000 });
@@ -82,7 +82,7 @@ test.describe('Login Flow (Exploratory)', () => {
     expect(inputType).toBe('text');
   });
 
-  test('Fail? — visiting /login while already logged in redirects away', { tag: '@exploratory' }, async ({ page }) => {
+  test('visiting /login while already logged in redirects away', { tag: '@exploratory' }, async ({ page }) => {
     await loginFlow.goToLogin();
     await loginFlow.login(VALID_EMAIL, VALID_PASSWORD);
     await expect(page).not.toHaveURL(`${BASE_URL}/login`);
@@ -90,14 +90,14 @@ test.describe('Login Flow (Exploratory)', () => {
     await expect(page).not.toHaveURL(`${BASE_URL}/login`);
   });
 
-  test('Fail? — browser back after login does not return to /login', { tag: '@exploratory' }, async ({ page }) => {
+  test('browser back after login does not return to /login', { tag: '@exploratory' }, async ({ page }) => {
     await loginFlow.goToLogin();
     await loginFlow.login(VALID_EMAIL, VALID_PASSWORD);
     await page.goBack();
     await expect(page).not.toHaveURL(`${BASE_URL}/login`);
   });
 
-  test('Fail? — Forgot Password page loads with an email input', { tag: '@exploratory' }, async ({ page }) => {
+  test('Forgot Password page loads with an email input', { tag: '@exploratory' }, async ({ page }) => {
     await loginFlow.goToLogin();
     await loginFlow.forgotPasswordLink.click();
     await page.waitForLoadState('networkidle');
@@ -105,7 +105,7 @@ test.describe('Login Flow (Exploratory)', () => {
     await expect(emailInput).toBeVisible();
   });
 
-  test('Fail? — error message appears after 5 consecutive wrong password attempts', { tag: '@exploratory' }, async ({ page }) => {
+  test('error message appears after 5 consecutive wrong password attempts', { tag: '@exploratory' }, async ({ page }) => {
     await loginFlow.goToLogin();
     for (let i = 0; i < 5; i++) {
       await loginFlow.emailField.fill(VALID_EMAIL);
@@ -119,17 +119,17 @@ test.describe('Login Flow (Exploratory)', () => {
     await expect(lockoutMsg).toBeVisible();
   });
 
-  test('Fail? — email field has autocomplete="email" attribute', { tag: '@exploratory' }, async () => {
+  test('email field has autocomplete="email" attribute', { tag: '@exploratory' }, async () => {
     await loginFlow.goToLogin();
     await expect(loginFlow.emailField).toHaveAttribute('autocomplete', 'email');
   });
 
-  test('Fail? — password field has autocomplete="current-password" attribute', { tag: '@exploratory' }, async () => {
+  test('password field has autocomplete="current-password" attribute', { tag: '@exploratory' }, async () => {
     await loginFlow.goToLogin();
     await expect(loginFlow.passwordField).toHaveAttribute('autocomplete', 'current-password');
   });
 
-  test('Fail? — session persists after page refresh post-login', { tag: '@exploratory' }, async ({ page }) => {
+  test('session persists after page refresh post-login', { tag: '@exploratory' }, async ({ page }) => {
     await loginFlow.goToLogin();
     await loginFlow.login(VALID_EMAIL, VALID_PASSWORD);
     const postLoginUrl = page.url();
@@ -138,7 +138,7 @@ test.describe('Login Flow (Exploratory)', () => {
     await expect(page).toHaveURL(postLoginUrl);
   });
 
-  test('Fail? — Create Account link navigates to /register', { tag: '@exploratory' }, async ({ page }) => {
+  test('Create Account link navigates to /register', { tag: '@exploratory' }, async ({ page }) => {
     await loginFlow.goToLogin();
     await Promise.all([
       page.waitForURL('**/register'),
@@ -147,7 +147,7 @@ test.describe('Login Flow (Exploratory)', () => {
     await expect(page).toHaveURL(`${BASE_URL}/register`);
   });
 
-  test('Fail? — login with phone number format is accepted', { tag: '@exploratory' }, async ({ page }) => {
+  test('login with phone number format is accepted', { tag: '@exploratory' }, async ({ page }) => {
     await loginFlow.goToLogin();
     await loginFlow.emailField.fill('+9779800000000');
     await loginFlow.passwordField.fill(VALID_PASSWORD);
@@ -157,12 +157,12 @@ test.describe('Login Flow (Exploratory)', () => {
     await expect(errorMsg).not.toHaveText(/invalid format|not a valid email/i);
   });
 
-  test('Fail? — login page document title contains "Login" or "Sign in"', { tag: '@exploratory' }, async ({ page }) => {
+  test('login page document title contains "Login" or "Sign in"', { tag: '@exploratory' }, async ({ page }) => {
     await loginFlow.goToLogin();
     await expect(page).toHaveTitle(/log in|sign in|login/i);
   });
 
-  test('Fail? — login redirect preserves intended destination after login', { tag: '@exploratory' }, async ({ page }) => {
+  test('login redirect preserves intended destination after login', { tag: '@exploratory' }, async ({ page }) => {
     await page.goto(`${BASE_URL}/trending`);
     await page.waitForLoadState('networkidle');
     await page.goto(`${BASE_URL}/login`);
@@ -170,7 +170,7 @@ test.describe('Login Flow (Exploratory)', () => {
     await expect(page).toHaveURL(`${BASE_URL}/trending`);
   });
 
-  test('Fail? — Caps Lock warning appears when Caps Lock is on', { tag: '@exploratory' }, async ({ page }) => {
+  test('Caps Lock warning appears when Caps Lock is on', { tag: '@exploratory' }, async ({ page }) => {
     await loginFlow.goToLogin();
     await loginFlow.passwordField.click();
     await page.keyboard.down('CapsLock');
@@ -180,7 +180,7 @@ test.describe('Login Flow (Exploratory)', () => {
     await page.keyboard.up('CapsLock');
   });
 
-  test('Fail? — login page has no console errors on load', { tag: '@exploratory' }, async ({ page }) => {
+  test('login page has no console errors on load', { tag: '@exploratory' }, async ({ page }) => {
     const errors: string[] = [];
     page.on('console', msg => {
       if (msg.type() === 'error') errors.push(msg.text());
@@ -189,7 +189,7 @@ test.describe('Login Flow (Exploratory)', () => {
     expect(errors).toHaveLength(0);
   });
 
-  test('Fail? — tab order moves email → password → submit button', { tag: '@exploratory' }, async ({ page }) => {
+  test('tab order moves email → password → submit button', { tag: '@exploratory' }, async ({ page }) => {
     await loginFlow.goToLogin();
     await loginFlow.emailField.click();
     await page.keyboard.press('Tab');
@@ -198,27 +198,27 @@ test.describe('Login Flow (Exploratory)', () => {
     await expect(loginFlow.submitBtn).toBeFocused();
   });
 
-  test('Fail? — login page is not accessible when already logged in (redirects)', { tag: '@exploratory' }, async ({ page }) => {
+  test('login page is not accessible when already logged in (redirects)', { tag: '@exploratory' }, async ({ page }) => {
     await loginFlow.goToLogin();
     await loginFlow.login(VALID_EMAIL, VALID_PASSWORD);
     await loginFlow.goToLogin();
     await expect(page).not.toHaveURL(`${BASE_URL}/login`);
   });
 
-  test('Fail? — password with leading and trailing spaces fails login', { tag: '@exploratory' }, async ({ page }) => {
+  test('password with leading and trailing spaces fails login', { tag: '@exploratory' }, async ({ page }) => {
     await loginFlow.goToLogin();
     await loginFlow.login(VALID_EMAIL, ` ${VALID_PASSWORD} `);
     await expect(page).toHaveURL(`${BASE_URL}/login`);
   });
 
-  test('Fail? — login page has a visible "Remember me" checkbox', { tag: '@exploratory' }, async ({ page }) => {
+  test('login page has a visible "Remember me" checkbox', { tag: '@exploratory' }, async ({ page }) => {
     await loginFlow.goToLogin();
     const rememberMe = page.getByRole('checkbox', { name: /remember me/i })
       .or(page.getByLabel(/remember me/i));
     await expect(rememberMe).toBeVisible();
   });
 
-  test('Fail? — submitting form via Tab to submit button then Enter logs in', { tag: '@exploratory' }, async ({ page }) => {
+  test('submitting form via Tab to submit button then Enter logs in', { tag: '@exploratory' }, async ({ page }) => {
     await loginFlow.goToLogin();
     await loginFlow.emailField.fill(VALID_EMAIL);
     await loginFlow.passwordField.fill(VALID_PASSWORD);
@@ -228,12 +228,12 @@ test.describe('Login Flow (Exploratory)', () => {
     await expect(page).not.toHaveURL(`${BASE_URL}/login`);
   });
 
-  test('Fail? — login page footer is visible', { tag: '@exploratory' }, async ({ page }) => {
+  test('login page footer is visible', { tag: '@exploratory' }, async ({ page }) => {
     await loginFlow.goToLogin();
     await expect(page.getByRole('contentinfo')).toBeVisible();
   });
 
-  test('Fail? — login page has a Log in with Google option that opens OAuth popup', { tag: '@exploratory' }, async ({ page }) => {
+  test('login page has a Log in with Google option that opens OAuth popup', { tag: '@exploratory' }, async ({ page }) => {
     await loginFlow.goToLogin();
     const [popup] = await Promise.all([
       page.waitForEvent('popup'),
@@ -243,7 +243,7 @@ test.describe('Login Flow (Exploratory)', () => {
     await expect(popup).toHaveURL(/accounts\.google\.com/);
   });
 
-  test('Fail? — unverified account shows verification prompt on login', { tag: '@exploratory' }, async ({ page }) => {
+  test('unverified account shows verification prompt on login', { tag: '@exploratory' }, async ({ page }) => {
     await loginFlow.goToLogin();
     await loginFlow.login('unverified@example.com', 'TestPass@123');
     const verifyMsg = page.locator('[role="alert"], .error, main').filter({
@@ -252,19 +252,19 @@ test.describe('Login Flow (Exploratory)', () => {
     await expect(verifyMsg).toBeVisible();
   });
 
-  test('Fail? — login page email input is focused automatically on load', { tag: '@exploratory' }, async () => {
+  test('login page email input is focused automatically on load', { tag: '@exploratory' }, async () => {
     await loginFlow.goToLogin();
     await expect(loginFlow.emailField).toBeFocused();
   });
 
-  test('Fail? — Forgot Password navigates to /forgot-password or /reset-password', { tag: '@exploratory' }, async ({ page }) => {
+  test('Forgot Password navigates to /forgot-password or /reset-password', { tag: '@exploratory' }, async ({ page }) => {
     await loginFlow.goToLogin();
     await loginFlow.forgotPasswordLink.click();
     await page.waitForLoadState('networkidle');
     await expect(page).toHaveURL(/forgot.password|reset.password|forgot|reset/i);
   });
 
-  test('Fail? — wrong credentials error message is specific (not generic)', { tag: '@exploratory' }, async ({ page }) => {
+  test('wrong credentials error message is specific (not generic)', { tag: '@exploratory' }, async ({ page }) => {
     await loginFlow.goToLogin();
     await loginFlow.login('wrong@example.com', 'WrongPass@999');
     const errorMsg = page.locator('[role="alert"], .error, [data-testid*="error"]').first();
