@@ -76,6 +76,7 @@ test.describe('Login Flow (Exploratory)', () => {
   test('Fail? — password toggle reveals password text on click', { tag: '@exploratory' }, async () => {
     await loginFlow.goToLogin();
     await loginFlow.passwordField.fill(VALID_PASSWORD);
+    await expect(loginFlow.passwordToggle).toBeVisible({ timeout: 5000 });
     await loginFlow.passwordToggle.click();
     const inputType = await loginFlow.passwordField.getAttribute('type');
     expect(inputType).toBe('text');

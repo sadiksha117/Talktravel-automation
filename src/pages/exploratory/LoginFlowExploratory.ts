@@ -27,7 +27,12 @@ export class LoginFlowExploratoryPage extends LoginFlowPage {
     // Login page - exploratory
     this.loginLogo = page.getByRole('link', { name: 'TalkTravel talk travel' });
     this.loginHeaderBlog = page.getByRole('link', { name: 'Blog', exact: true });
-    this.passwordToggle = page.locator('div:has(> input[type="password"]) > img').first();
+    this.passwordToggle = page
+      .locator('div:has(> input[type="password"]) > img')
+      .or(page.locator('div:has(> input[type="password"]) > button'))
+      .or(page.locator('div:has(> input[type="password"]) > span'))
+      .or(page.locator('[aria-label*="show" i], [aria-label*="password" i], [data-testid*="toggle"]'))
+      .first();
     this.forgotPasswordLink = page.getByRole('link', { name: /forgot/i });
     this.createAccountLink = page
       .getByRole('link', { name: /create account|register|sign up|join/i })
