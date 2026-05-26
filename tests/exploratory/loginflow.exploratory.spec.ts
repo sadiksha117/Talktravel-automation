@@ -129,6 +129,7 @@ test.describe('Login Flow (Exploratory)', () => {
   test('session persists after page refresh post-login', { tag: '@exploratory' }, async ({ page }) => {
     await loginFlow.goToLogin();
     await loginFlow.login(VALID_EMAIL, VALID_PASSWORD);
+    await expect(page).not.toHaveURL(`${BASE_URL}/login`);
     const postLoginUrl = page.url();
     await page.reload();
     await expect(page).not.toHaveURL(`${BASE_URL}/login`);
