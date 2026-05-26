@@ -68,6 +68,42 @@ test.describe('Login Flow (Exploratory)', () => {
     await expect(loginFlow.submitBtn).toBeFocused();
   });
 
+  test('Edge — login page has no console errors on load', { tag: '@exploratory' }, async ({ page }) => {
+    const errors: string[] = [];
+    page.on('console', msg => {
+      if (msg.type() === 'error') errors.push(msg.text());
+    });
+    await loginFlow.goToLogin();
+    expect(errors).toHaveLength(0);
+  });
+
+  test('Edge — logo href on login page points to homepage', { tag: '@exploratory' }, async () => {
+    await loginFlow.goToLogin();
+    await expect(loginFlow.loginLogo).toHaveAttribute('href', '/');
+  });
+
+  test('Edge — Forgot Password link href points to /forgot-password', { tag: '@exploratory' }, async () => {
+    await loginFlow.goToLogin();
+    await expect(loginFlow.forgotPasswordLink).toHaveAttribute('href', '/forgot-password');
+  });
+
+  test('Edge — Create Account link navigates to /register', { tag: '@exploratory' }, async ({ page }) => {
+    await loginFlow.goToLogin();
+    await Promise.all([
+      page.waitForURL('**/register'),
+      loginFlow.createAccountLink.click(),
+    ]);
+    await expect(page).toHaveURL(`${BASE_URL}/register`);
+  });
+
+  test('Edge — login page is not accessible when already logged in', { tag: '@exploratory' }, async ({ page }) => {
+    await loginFlow.goToLogin();
+    await loginFlow.login(VALID_EMAIL, VALID_PASSWORD);
+    await expect(page).not.toHaveURL(`${BASE_URL}/login`);
+    await loginFlow.goToLogin();
+    await expect(page).not.toHaveURL(`${BASE_URL}/login`);
+  });
+
   // ── Negative cases ────────────────────────────────────────────────────────
 
   test('Negative — Forgot Password page loads with an email input', { tag: '@exploratory' }, async ({ page }) => {
@@ -130,5 +166,41 @@ test.describe('Login Flow (Exploratory)', () => {
     await page.goto(`${BASE_URL}/login`);
     await loginFlow.login(VALID_EMAIL, VALID_PASSWORD);
     await expect(page).toHaveURL(`${BASE_URL}/trending`);
+  });
+
+  test('Negative — empty email field shows validation error', { tag: '@exploratory' }, async ({ page }) => {
+    await loginFlow.goToLogin();
+    await loginFlow.passwordField.fill(VALID_PASSWORD);
+    await loginFlow.submitBtn.click();
+    await expect(page).toHaveURL(`${BASE_URL}/login`);
+    await expect(page.locator('[role="alert"], [class*="error"], [class*="invalid"]').first()).toBeVisible();
+  });
+
+  test('Negative — empty password field shows validation error', { tag: '@exploratory' }, async ({ page }) => {
+    await loginFlow.goToLogin();
+    await loginFlow.emailField.fill(VALID_EMAIL);
+    await loginFlow.submitBtn.click();
+    await expect(page).toHaveURL(`${BASE_URL}/login`);
+    await expect(page.locator('[role="alert"], [class*="error"], [class*="invalid"]').first()).toBeVisible();
+  });
+
+  test('Negative — SQL injection in email field stays on login', { tag: '@exploratory' }, async ({ page }) => {
+    await loginFlow.goToLogin();
+    await loginFlow.login("' OR 1=1 --", VALID_PASSWORD);
+    await expect(page).toHaveURL(`${BASE_URL}/login`);
+  });
+
+  test('Negative — very long email does not crash the page', { tag: '@exploratory' }, async ({ page }) => {
+    await loginFlow.goToLogin();
+    await loginFlow.login(`${'a'.repeat(200)}@example.com`, VALID_PASSWORD);
+    await expect(loginFlow.loginHeading).toBeVisible();
+    await expect(page).toHaveURL(`${BASE_URL}/login`);
+  });
+
+  test('Negative — XSS payload in email field is not executed', { tag: '@exploratory' }, async ({ page }) => {
+    await loginFlow.goToLogin();
+    await loginFlow.login('<script>alert(1)</script>@x.com', VALID_PASSWORD);
+    await expect(page).toHaveURL(`${BASE_URL}/login`);
+    await expect(loginFlow.loginHeading).toBeVisible();
   });
 });
