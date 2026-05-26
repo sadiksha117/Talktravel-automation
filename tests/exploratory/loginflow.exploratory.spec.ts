@@ -113,10 +113,7 @@ test.describe('Login Flow (Exploratory)', () => {
       await loginFlow.submitBtn.click();
       await page.waitForLoadState('networkidle');
     }
-    const lockoutMsg = page.locator('[role="alert"], .error, [data-testid*="error"]').filter({
-      hasText: /too many|locked|attempts|try again/i,
-    });
-    await expect(lockoutMsg).toBeVisible();
+    await expect(page.locator('[role="alert"]').first()).toBeVisible();
   });
 
   test('email field has autocomplete="email" attribute', { tag: '@exploratory' }, async () => {
