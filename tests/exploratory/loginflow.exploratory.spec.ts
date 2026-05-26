@@ -154,4 +154,121 @@ test.describe('Login Flow (Exploratory)', () => {
     const errorMsg = page.locator('[role="alert"], .error, [data-testid*="error"]');
     await expect(errorMsg).not.toHaveText(/invalid format|not a valid email/i);
   });
+
+  test('Fail? — login page document title contains "Login" or "Sign in"', { tag: '@exploratory' }, async ({ page }) => {
+    await loginFlow.goToLogin();
+    await expect(page).toHaveTitle(/log in|sign in|login/i);
+  });
+
+  test('Fail? — login redirect preserves intended destination after login', { tag: '@exploratory' }, async ({ page }) => {
+    await page.goto(`${BASE_URL}/trending`);
+    await page.waitForLoadState('networkidle');
+    await page.goto(`${BASE_URL}/login`);
+    await loginFlow.login(VALID_EMAIL, VALID_PASSWORD);
+    await expect(page).toHaveURL(`${BASE_URL}/trending`);
+  });
+
+  test('Fail? — Caps Lock warning appears when Caps Lock is on', { tag: '@exploratory' }, async ({ page }) => {
+    await loginFlow.goToLogin();
+    await loginFlow.passwordField.click();
+    await page.keyboard.down('CapsLock');
+    await loginFlow.passwordField.fill('Test');
+    const capsWarning = page.locator('text=/caps lock/i');
+    await expect(capsWarning).toBeVisible();
+    await page.keyboard.up('CapsLock');
+  });
+
+  test('Fail? — login page has no console errors on load', { tag: '@exploratory' }, async ({ page }) => {
+    const errors: string[] = [];
+    page.on('console', msg => {
+      if (msg.type() === 'error') errors.push(msg.text());
+    });
+    await loginFlow.goToLogin();
+    expect(errors).toHaveLength(0);
+  });
+
+  test('Fail? — tab order moves email → password → submit button', { tag: '@exploratory' }, async ({ page }) => {
+    await loginFlow.goToLogin();
+    await loginFlow.emailField.click();
+    await page.keyboard.press('Tab');
+    await expect(loginFlow.passwordField).toBeFocused();
+    await page.keyboard.press('Tab');
+    await expect(loginFlow.submitBtn).toBeFocused();
+  });
+
+  test('Fail? — login page is not accessible when already logged in (redirects)', { tag: '@exploratory' }, async ({ page }) => {
+    await loginFlow.goToLogin();
+    await loginFlow.login(VALID_EMAIL, VALID_PASSWORD);
+    await loginFlow.goToLogin();
+    await expect(page).not.toHaveURL(`${BASE_URL}/login`);
+  });
+
+  test('Fail? — password with leading and trailing spaces fails login', { tag: '@exploratory' }, async ({ page }) => {
+    await loginFlow.goToLogin();
+    await loginFlow.login(VALID_EMAIL, ` ${VALID_PASSWORD} `);
+    await expect(page).toHaveURL(`${BASE_URL}/login`);
+  });
+
+  test('Fail? — login page has a visible "Remember me" checkbox', { tag: '@exploratory' }, async ({ page }) => {
+    await loginFlow.goToLogin();
+    const rememberMe = page.getByRole('checkbox', { name: /remember me/i })
+      .or(page.getByLabel(/remember me/i));
+    await expect(rememberMe).toBeVisible();
+  });
+
+  test('Fail? — submitting form via Tab to submit button then Enter logs in', { tag: '@exploratory' }, async ({ page }) => {
+    await loginFlow.goToLogin();
+    await loginFlow.emailField.fill(VALID_EMAIL);
+    await loginFlow.passwordField.fill(VALID_PASSWORD);
+    await loginFlow.submitBtn.focus();
+    await page.keyboard.press('Enter');
+    await page.waitForLoadState('networkidle');
+    await expect(page).not.toHaveURL(`${BASE_URL}/login`);
+  });
+
+  test('Fail? — login page footer is visible', { tag: '@exploratory' }, async ({ page }) => {
+    await loginFlow.goToLogin();
+    await expect(page.getByRole('contentinfo')).toBeVisible();
+  });
+
+  test('Fail? — login page has a Log in with Google option that opens OAuth popup', { tag: '@exploratory' }, async ({ page }) => {
+    await loginFlow.goToLogin();
+    const [popup] = await Promise.all([
+      page.waitForEvent('popup'),
+      loginFlow.continueWithGoogleBtn.click(),
+    ]);
+    await expect(popup).toBeTruthy();
+    await expect(popup).toHaveURL(/accounts\.google\.com/);
+  });
+
+  test('Fail? — unverified account shows verification prompt on login', { tag: '@exploratory' }, async ({ page }) => {
+    await loginFlow.goToLogin();
+    await loginFlow.login('unverified@example.com', 'TestPass@123');
+    const verifyMsg = page.locator('[role="alert"], .error, main').filter({
+      hasText: /verify|verification|confirm/i,
+    });
+    await expect(verifyMsg).toBeVisible();
+  });
+
+  test('Fail? — login page email input is focused automatically on load', { tag: '@exploratory' }, async () => {
+    await loginFlow.goToLogin();
+    await expect(loginFlow.emailField).toBeFocused();
+  });
+
+  test('Fail? — Forgot Password navigates to /forgot-password or /reset-password', { tag: '@exploratory' }, async ({ page }) => {
+    await loginFlow.goToLogin();
+    await loginFlow.forgotPasswordLink.click();
+    await page.waitForLoadState('networkidle');
+    await expect(page).toHaveURL(/forgot.password|reset.password|forgot|reset/i);
+  });
+
+  test('Fail? — wrong credentials error message is specific (not generic)', { tag: '@exploratory' }, async ({ page }) => {
+    await loginFlow.goToLogin();
+    await loginFlow.login('wrong@example.com', 'WrongPass@999');
+    const errorMsg = page.locator('[role="alert"], .error, [data-testid*="error"]').first();
+    await expect(errorMsg).toBeVisible();
+    const text = await errorMsg.innerText();
+    expect(text.trim().length).toBeGreaterThan(5);
+    expect(text).not.toMatch(/error|something went wrong/i);
+  });
 });
