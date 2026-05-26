@@ -118,10 +118,9 @@ test.describe('Homepage / Trending Landing Flow (Pre-Login) — Happy Path', () 
 
   // ── Step 6 — Click a topic chip ──────────────────────────────────────────
 
-  // fixme: topic chip URL pattern not confirmed — may use /tag/, /category/, or query param
-  test.fixme('Step 6 — clicking a topic chip navigates to /topic(s)/{slug}', async ({ page }) => {
+  test('Step 6 — clicking a topic chip navigates to /tags/{slug}', async ({ page }) => {
     await flow.clickFirstTopicChip();
-    await expect(page).toHaveURL(/\/topics?\/.+/);
+    await expect(page).toHaveURL(/\/tags\/.+/);
   });
 
   // ── Step 7 — Click an author username / avatar ───────────────────────────

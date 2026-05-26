@@ -49,13 +49,11 @@ export class HomepageLandingFlowPage extends BasePage {
     this.feedTabLatest = page.getByRole('link', { name: 'Latest', exact: true });
     this.feedTabForYou = page.getByRole('link', { name: 'For You', exact: true });
 
-    // View switch — clicking the ≡ icon button opens a dropdown; Card/Compact are inside it.
-    // Items are only added to the DOM after the dropdown is opened, so we must click the
-    // trigger first before interacting with cardViewToggle / compactViewToggle.
-    this.viewSwitchMenuBtn = page.locator('[aria-haspopup="menu"], [aria-haspopup="true"]').first().or(
-      page.locator('button[aria-label*="view" i], button[aria-label*="layout" i], button[aria-label*="display" i]')
-    ).first();
-    // Dropdown items have no ARIA role — match by visible text inside the open dropdown
+    // View switch — the ≡ button sits immediately after the tabs <ul> in the DOM.
+    // We scope by position to avoid matching image-expand buttons on post cards
+    // which also have aria-haspopup and appear earlier in the DOM.
+    this.viewSwitchMenuBtn = page.locator('ul:has(a[href="/trending"]) ~ button');
+    // Dropdown items appear in DOM only after the menu is opened; matched by text.
     this.cardViewToggle = page.getByText('Card', { exact: true });
     this.compactViewToggle = page.getByText('Compact', { exact: true });
 
@@ -81,9 +79,10 @@ export class HomepageLandingFlowPage extends BasePage {
   }
 
   async dismissCookieBanner(): Promise<void> {
-    const acceptBtn = this.page.getByRole('button', { name: 'Accept All' });
-    if (await acceptBtn.isVisible()) {
-      await acceptBtn.click();
+    try {
+      await this.page.getByRole('button', { name: 'Accept All' }).click({ timeout: 3000 });
+    } catch {
+      // Banner not present
     }
   }
 
@@ -120,11 +119,11 @@ export class HomepageLandingFlowPage extends BasePage {
   }
 
   async clickFirstTopicChip(): Promise<void> {
-    // Topic links may use /topic/ or /topics/ depending on the app's routing
-    const topicChip = this.page.locator('a[href*="/topic/"]').first();
+    // Topic links use /tags/{slug} on staging
+    const topicChip = this.page.locator('a[href^="/tags/"]').first();
     await topicChip.waitFor({ state: 'visible' });
     await topicChip.click();
-    await this.page.waitForURL(/\/topics?\//);
+    await this.page.waitForURL('**/tags/**');
     await this.waitForPageLoad();
   }
 
