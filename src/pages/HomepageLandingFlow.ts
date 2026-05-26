@@ -49,12 +49,9 @@ export class HomepageLandingFlowPage extends BasePage {
     this.feedTabLatest = page.getByRole('link', { name: 'Latest', exact: true });
     this.feedTabForYou = page.getByRole('link', { name: 'For You', exact: true });
 
-    // The ≡ view switch button is a sibling of the tabs list.
-    // XPath: a[href="/trending"] → up to li → up to list element → following sibling button.
-    // Works whether the list is <ul> or <div role="list">.
-    this.viewSwitchMenuBtn = page.locator(
-      'xpath=//a[@href="/trending"]/parent::*/parent::*/following-sibling::button'
-    );
+    // The ≡ view switch button has accessible name "TalkTravel" (from its img alt).
+    // It is the only button on the page with that name — logo is a link, not a button.
+    this.viewSwitchMenuBtn = page.getByRole('button', { name: 'TalkTravel' });
     // Dropdown items appear in DOM only after the menu is opened; matched by text.
     this.cardViewToggle = page.getByText('Card', { exact: true });
     this.compactViewToggle = page.getByText('Compact', { exact: true });
