@@ -85,6 +85,7 @@ test.describe('Login Flow (Exploratory)', () => {
   test('Fail? — visiting /login while already logged in redirects away', { tag: '@exploratory' }, async ({ page }) => {
     await loginFlow.goToLogin();
     await loginFlow.login(VALID_EMAIL, VALID_PASSWORD);
+    await expect(page).not.toHaveURL(`${BASE_URL}/login`);
     await page.goto(`${BASE_URL}/login`);
     await expect(page).not.toHaveURL(`${BASE_URL}/login`);
   });
