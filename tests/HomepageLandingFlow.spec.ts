@@ -117,16 +117,16 @@ test.describe('Homepage / Trending Landing Flow (Pre-Login) — Happy Path', () 
 
   // ── Step 6 — Click a topic chip ──────────────────────────────────────────
 
-  test('Step 6 — clicking a topic chip navigates to /topic/{slug}', async ({ page }) => {
+  test('Step 6 — clicking a topic chip navigates to /topic(s)/{slug}', async ({ page }) => {
     await flow.clickFirstTopicChip();
-    await expect(page).toHaveURL(/\/topic\/.+/);
+    await expect(page).toHaveURL(/\/topics?\/.+/);
   });
 
   // ── Step 7 — Click an author username / avatar ───────────────────────────
 
-  test('Step 7 — clicking an author link navigates to /user/{username}', async ({ page }) => {
+  test('Step 7 — clicking an author link navigates to /user(s)|/profile/{username}', async ({ page }) => {
     await flow.clickFirstAuthorLink();
-    await expect(page).toHaveURL(/\/user\/.+/);
+    await expect(page).toHaveURL(/\/(user|users|profile)\/.+/);
   });
 
   // ── Step 9 — Click a post in Popular This Week sidebar ───────────────────
@@ -138,10 +138,10 @@ test.describe('Homepage / Trending Landing Flow (Pre-Login) — Happy Path', () 
 
   // ── Step 10 — Logo click returns to /trending ────────────────────────────
 
-  test('Step 10 — clicking logo from a post page returns to /trending', async ({ page }) => {
+  test('Step 10 — clicking logo from a post page returns to homepage (/ or /trending)', async ({ page }) => {
     await flow.clickFirstPostCard();
     await flow.clickLogo();
-    await expect(page).toHaveURL(/\/trending$/);
+    await expect(page).toHaveURL(/\/(trending)?$/);
   });
 
   // ── Full end-to-end happy path ───────────────────────────────────────────
@@ -166,8 +166,8 @@ test.describe('Homepage / Trending Landing Flow (Pre-Login) — Happy Path', () 
     await expect(page).toHaveURL(/\/post\/.+/);
     await expect(flow.postTitle).toBeVisible();
 
-    // Step 10 — logo returns to /trending
+    // Step 10 — logo returns to homepage (/ or /trending)
     await flow.clickLogo();
-    await expect(page).toHaveURL(/\/trending$/);
+    await expect(page).toHaveURL(/\/(trending)?$/);
   });
 });

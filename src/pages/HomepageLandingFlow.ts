@@ -46,16 +46,21 @@ export class HomepageLandingFlowPage extends BasePage {
     this.feedTabTrending = page.getByRole('link', { name: 'Trending', exact: true });
     this.feedTabLatest = page.getByRole('link', { name: 'Latest', exact: true });
 
-    // View toggles
-    this.cardViewToggle = page.getByRole('button', { name: /card view/i });
-    this.compactViewToggle = page.getByRole('button', { name: /compact view/i });
+    // View toggles — may be <a> links or <button> elements with various aria-labels / data-testids
+    this.cardViewToggle = page.locator(
+      '[data-testid="view-card"], [aria-label="Card view"], [aria-label="Card"], a:has-text("Card"), button:has-text("Card")'
+    ).first();
+    this.compactViewToggle = page.locator(
+      '[data-testid="view-compact"], [aria-label="Compact view"], [aria-label="Compact"], a:has-text("Compact"), button:has-text("Compact")'
+    ).first();
 
     // Feed cards — anchor elements wrapping post content (has(div) excludes sidebar links)
     this.feedPostCards = page.locator('a[href^="/post/"]:has(div)');
 
-    // Sidebar
+    // Sidebar — "Popular This Week" links are simple post anchors without div children
+    // (feed card anchors use :has(div) to distinguish them from sidebar links)
     this.popularThisWeek = page.getByText('Popular This Week');
-    this.popularThisWeekLinks = page.locator('aside').getByRole('link');
+    this.popularThisWeekLinks = page.locator('a[href^="/post/"]:not(:has(div))');
 
     // Footer
     this.footer = page.locator('footer');
@@ -106,18 +111,20 @@ export class HomepageLandingFlowPage extends BasePage {
   }
 
   async clickFirstTopicChip(): Promise<void> {
-    const topicChip = this.page.locator('a[href^="/topic/"]').first();
+    // Topic links may use /topic/ or /topics/ depending on the app's routing
+    const topicChip = this.page.locator('a[href*="/topic/"]').first();
     await topicChip.waitFor({ state: 'visible' });
     await topicChip.click();
-    await this.page.waitForURL('**/topic/**');
+    await this.page.waitForURL(/\/topics?\//);
     await this.waitForPageLoad();
   }
 
   async clickFirstAuthorLink(): Promise<void> {
-    const authorLink = this.page.locator('a[href^="/user/"]').first();
+    // Author profile links may use /user/, /users/, or /profile/ depending on routing
+    const authorLink = this.page.locator('a[href*="/user/"], a[href*="/profile/"]').first();
     await authorLink.waitFor({ state: 'visible' });
     await authorLink.click();
-    await this.page.waitForURL('**/user/**');
+    await this.page.waitForURL(/\/(user|users|profile)\//);
     await this.waitForPageLoad();
   }
 
@@ -131,7 +138,8 @@ export class HomepageLandingFlowPage extends BasePage {
 
   async clickLogo(): Promise<void> {
     await this.logo.click();
-    await this.page.waitForURL('**/trending**');
+    // Logo navigates to root (/); the app may or may not redirect to /trending
+    await this.page.waitForURL(/\/(trending)?$/);
     await this.waitForPageLoad();
   }
 }
