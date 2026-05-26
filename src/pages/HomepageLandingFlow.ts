@@ -49,10 +49,12 @@ export class HomepageLandingFlowPage extends BasePage {
     this.feedTabLatest = page.getByRole('link', { name: 'Latest', exact: true });
     this.feedTabForYou = page.getByRole('link', { name: 'For You', exact: true });
 
-    // View switch — the ≡ button sits immediately after the tabs <ul> in the DOM.
-    // We scope by position to avoid matching image-expand buttons on post cards
-    // which also have aria-haspopup and appear earlier in the DOM.
-    this.viewSwitchMenuBtn = page.locator('ul:has(a[href="/trending"]) ~ button');
+    // The ≡ view switch button is a sibling of the tabs list.
+    // XPath: a[href="/trending"] → up to li → up to list element → following sibling button.
+    // Works whether the list is <ul> or <div role="list">.
+    this.viewSwitchMenuBtn = page.locator(
+      'xpath=//a[@href="/trending"]/parent::*/parent::*/following-sibling::button'
+    );
     // Dropdown items appear in DOM only after the menu is opened; matched by text.
     this.cardViewToggle = page.getByText('Card', { exact: true });
     this.compactViewToggle = page.getByText('Compact', { exact: true });
