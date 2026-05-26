@@ -116,9 +116,9 @@ test.describe('Login Flow (Exploratory)', () => {
     await expect(page.locator('[role="alert"]').first()).toBeVisible();
   });
 
-  test('email field has autocomplete="email" attribute', { tag: '@exploratory' }, async () => {
+  test('email field has autocomplete="username" attribute', { tag: '@exploratory' }, async () => {
     await loginFlow.goToLogin();
-    await expect(loginFlow.emailField).toHaveAttribute('autocomplete', 'email');
+    await expect(loginFlow.emailField).toHaveAttribute('autocomplete', 'username');
   });
 
   test('password field has autocomplete="current-password" attribute', { tag: '@exploratory' }, async () => {
