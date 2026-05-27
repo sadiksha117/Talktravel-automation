@@ -54,9 +54,9 @@ test.describe('Login Flow (Exploratory)', () => {
     await expect(page).toHaveTitle(/log in|sign in|login/i);
   });
 
-  test('Edge — email field has autocomplete="username" attribute', { tag: '@exploratory' }, async () => {
+  test('Edge — login field has autocomplete="username" attribute', { tag: '@exploratory' }, async () => {
     await loginFlow.goToLogin();
-    await expect(loginFlow.emailField).toHaveAttribute('autocomplete', 'username');
+    await expect(loginFlow.loginField).toHaveAttribute('autocomplete', 'username');
   });
 
   test('Edge — password field has autocomplete="current-password" attribute', { tag: '@exploratory' }, async () => {
@@ -97,12 +97,12 @@ test.describe('Login Flow (Exploratory)', () => {
     await expect(page).toHaveURL(`${BASE_URL}/register`);
   });
 
-  test('Edge — failed login keeps email field value intact', { tag: '@exploratory' }, async () => {
+  test('Edge — failed login keeps login field value intact', { tag: '@exploratory' }, async () => {
     await loginFlow.goToLogin();
-    await loginFlow.emailField.fill(VALID_EMAIL);
+    await loginFlow.loginField.fill(VALID_EMAIL);
     await loginFlow.passwordField.fill('WrongPass@999');
     await loginFlow.submitBtn.click();
-    await expect(loginFlow.emailField).toHaveValue(VALID_EMAIL);
+    await expect(loginFlow.loginField).toHaveValue(VALID_EMAIL);
   });
 
   // ── Negative cases ────────────────────────────────────────────────────────
@@ -118,7 +118,7 @@ test.describe('Login Flow (Exploratory)', () => {
   test('Negative — error message appears after 5 consecutive wrong password attempts', { tag: '@exploratory' }, async ({ page }) => {
     await loginFlow.goToLogin();
     for (let i = 0; i < 5; i++) {
-      await loginFlow.emailField.fill(VALID_EMAIL);
+      await loginFlow.loginField.fill(VALID_EMAIL);
       await loginFlow.passwordField.fill('WrongPass@999');
       await loginFlow.submitBtn.click();
       await page.waitForLoadState('networkidle');
@@ -137,7 +137,7 @@ test.describe('Login Flow (Exploratory)', () => {
 
   test('Negative — login with phone number format does not show format error', { tag: '@exploratory' }, async ({ page }) => {
     await loginFlow.goToLogin();
-    await loginFlow.emailField.fill('+9779800000000');
+    await loginFlow.loginField.fill('+9779800000000');
     await loginFlow.passwordField.fill(VALID_PASSWORD);
     await loginFlow.submitBtn.click();
     await page.waitForLoadState('networkidle');
@@ -151,7 +151,7 @@ test.describe('Login Flow (Exploratory)', () => {
     await expect(page).toHaveURL(`${BASE_URL}/login`);
   });
 
-  test('Negative — empty email field shows validation error', { tag: '@exploratory' }, async ({ page }) => {
+  test('Negative — empty login field shows validation error', { tag: '@exploratory' }, async ({ page }) => {
     await loginFlow.goToLogin();
     await loginFlow.passwordField.fill(VALID_PASSWORD);
     await loginFlow.submitBtn.click();
@@ -161,40 +161,40 @@ test.describe('Login Flow (Exploratory)', () => {
 
   test('Negative — empty password field shows validation error', { tag: '@exploratory' }, async ({ page }) => {
     await loginFlow.goToLogin();
-    await loginFlow.emailField.fill(VALID_EMAIL);
+    await loginFlow.loginField.fill(VALID_EMAIL);
     await loginFlow.submitBtn.click();
     await expect(page).toHaveURL(`${BASE_URL}/login`);
     await expect(page.locator('[role="alert"], [class*="error"], [class*="invalid"]').first()).toBeVisible();
   });
 
-  test('Negative — SQL injection in email field stays on login', { tag: '@exploratory' }, async ({ page }) => {
+  test('Negative — SQL injection in login field stays on login', { tag: '@exploratory' }, async ({ page }) => {
     await loginFlow.goToLogin();
     await loginFlow.login("' OR 1=1 --", VALID_PASSWORD);
     await expect(page).toHaveURL(`${BASE_URL}/login`);
   });
 
-  test('Negative — very long email does not crash the page', { tag: '@exploratory' }, async ({ page }) => {
+  test('Negative — very long identifier does not crash the page', { tag: '@exploratory' }, async ({ page }) => {
     await loginFlow.goToLogin();
     await loginFlow.login(`${'a'.repeat(200)}@example.com`, VALID_PASSWORD);
     await expect(loginFlow.loginHeading).toBeVisible();
     await expect(page).toHaveURL(`${BASE_URL}/login`);
   });
 
-  test('Negative — XSS payload in email field is not executed', { tag: '@exploratory' }, async ({ page }) => {
+  test('Negative — XSS payload in login field is not executed', { tag: '@exploratory' }, async ({ page }) => {
     await loginFlow.goToLogin();
     await loginFlow.login('<script>alert(1)</script>@x.com', VALID_PASSWORD);
     await expect(page).toHaveURL(`${BASE_URL}/login`);
     await expect(loginFlow.loginHeading).toBeVisible();
   });
 
-  test('Negative — unregistered email shows error message', { tag: '@exploratory' }, async ({ page }) => {
+  test('Negative — unregistered identifier shows error message', { tag: '@exploratory' }, async ({ page }) => {
     await loginFlow.goToLogin();
     await loginFlow.login('doesnotexist999@example.com', VALID_PASSWORD);
     await expect(page).toHaveURL(`${BASE_URL}/login`);
     await expect(page.locator('[role="alert"]').first()).toBeVisible();
   });
 
-  test('Negative — correct email with wrong case password fails login', { tag: '@exploratory' }, async ({ page }) => {
+  test('Negative — correct identifier with wrong case password fails login', { tag: '@exploratory' }, async ({ page }) => {
     await loginFlow.goToLogin();
     await loginFlow.login(VALID_EMAIL, VALID_PASSWORD.toLowerCase());
     await expect(page).toHaveURL(`${BASE_URL}/login`);
@@ -242,11 +242,11 @@ test.describe('Login Flow (Exploratory)', () => {
     await expect(page.getByText('OR', { exact: true })).toBeVisible();
   });
 
-  test('Edge — email field remains editable after a failed login attempt', { tag: '@exploratory' }, async () => {
+  test('Edge — login field remains editable after a failed login attempt', { tag: '@exploratory' }, async () => {
     await loginFlow.goToLogin();
     await loginFlow.login('wrong@example.com', 'WrongPass@999');
-    await loginFlow.emailField.fill('another@example.com');
-    await expect(loginFlow.emailField).toHaveValue('another@example.com');
+    await loginFlow.loginField.fill('another@example.com');
+    await expect(loginFlow.loginField).toHaveValue('another@example.com');
   });
 
   test('Edge — login page has no broken images', { tag: '@exploratory' }, async ({ page }) => {
@@ -271,10 +271,10 @@ test.describe('Login Flow (Exploratory)', () => {
     expect(target).not.toBe('_blank');
   });
 
-  test('Edge — Enter key in email field does not submit form with only email filled', { tag: '@exploratory' }, async ({ page }) => {
+  test('Edge — Enter key in login field does not submit form with only identifier filled', { tag: '@exploratory' }, async ({ page }) => {
     await loginFlow.goToLogin();
-    await loginFlow.emailField.fill(VALID_EMAIL);
-    await loginFlow.emailField.press('Enter');
+    await loginFlow.loginField.fill(VALID_EMAIL);
+    await loginFlow.loginField.press('Enter');
     await expect(page).toHaveURL(`${BASE_URL}/login`);
   });
 
@@ -289,19 +289,19 @@ test.describe('Login Flow (Exploratory)', () => {
 
   // ── Negative cases (set 2) ────────────────────────────────────────────────
 
-  test('Negative — email without @ symbol stays on /login', { tag: '@exploratory' }, async ({ page }) => {
+  test('Negative — login field without @ treated as username stays on /login with wrong credentials', { tag: '@exploratory' }, async ({ page }) => {
     await loginFlow.goToLogin();
-    await loginFlow.login('notanemail', VALID_PASSWORD);
+    await loginFlow.login('notaregisteredusername', VALID_PASSWORD);
     await expect(page).toHaveURL(`${BASE_URL}/login`);
   });
 
-  test('Negative — email ending in @ with no domain stays on /login', { tag: '@exploratory' }, async ({ page }) => {
+  test('Negative — identifier ending in @ with no domain stays on /login', { tag: '@exploratory' }, async ({ page }) => {
     await loginFlow.goToLogin();
     await loginFlow.login('user@', VALID_PASSWORD);
     await expect(page).toHaveURL(`${BASE_URL}/login`);
   });
 
-  test('Negative — all-whitespace email stays on /login', { tag: '@exploratory' }, async ({ page }) => {
+  test('Negative — all-whitespace login field stays on /login', { tag: '@exploratory' }, async ({ page }) => {
     await loginFlow.goToLogin();
     await loginFlow.login('     ', VALID_PASSWORD);
     await expect(page).toHaveURL(`${BASE_URL}/login`);
@@ -313,7 +313,7 @@ test.describe('Login Flow (Exploratory)', () => {
     await expect(page).toHaveURL(`${BASE_URL}/login`);
   });
 
-  test('Negative — email with Unicode accented characters stays on /login', { tag: '@exploratory' }, async ({ page }) => {
+  test('Negative — identifier with Unicode accented characters stays on /login', { tag: '@exploratory' }, async ({ page }) => {
     await loginFlow.goToLogin();
     await loginFlow.login('üser@éxample.com', VALID_PASSWORD);
     await expect(page).toHaveURL(`${BASE_URL}/login`);
@@ -332,7 +332,7 @@ test.describe('Login Flow (Exploratory)', () => {
     await expect(page).toHaveURL(`${BASE_URL}/login`);
   });
 
-  test('Negative — email with multiple @ symbols stays on /login', { tag: '@exploratory' }, async ({ page }) => {
+  test('Negative — identifier with multiple @ symbols stays on /login', { tag: '@exploratory' }, async ({ page }) => {
     await loginFlow.goToLogin();
     await loginFlow.login('user@@example.com', VALID_PASSWORD);
     await expect(page).toHaveURL(`${BASE_URL}/login`);
@@ -344,19 +344,19 @@ test.describe('Login Flow (Exploratory)', () => {
     await expect(page).not.toHaveURL(`${BASE_URL}/login`);
   });
 
-  test('Negative — email with consecutive dots stays on /login', { tag: '@exploratory' }, async ({ page }) => {
+  test('Negative — identifier with consecutive dots stays on /login', { tag: '@exploratory' }, async ({ page }) => {
     await loginFlow.goToLogin();
     await loginFlow.login('user..name@example.com', VALID_PASSWORD);
     await expect(page).toHaveURL(`${BASE_URL}/login`);
   });
 
-  test('Negative — single character password with valid email stays on /login', { tag: '@exploratory' }, async ({ page }) => {
+  test('Negative — single character password with valid identifier stays on /login', { tag: '@exploratory' }, async ({ page }) => {
     await loginFlow.goToLogin();
     await loginFlow.login(VALID_EMAIL, 'a');
     await expect(page).toHaveURL(`${BASE_URL}/login`);
   });
 
-  test('Negative — numeric-only password with valid email stays on /login', { tag: '@exploratory' }, async ({ page }) => {
+  test('Negative — numeric-only password with valid identifier stays on /login', { tag: '@exploratory' }, async ({ page }) => {
     await loginFlow.goToLogin();
     await loginFlow.login(VALID_EMAIL, '12345678');
     await expect(page).toHaveURL(`${BASE_URL}/login`);

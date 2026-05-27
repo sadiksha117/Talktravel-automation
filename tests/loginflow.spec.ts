@@ -60,9 +60,9 @@ test.describe('Login Flow', () => {
 
   // ── Step 2: Login page form elements ─────────────────────────────────────
 
-  test('Step 2 — email field is visible', async () => {
+  test('Step 2 — login field is visible', async () => {
     await loginFlow.goToLogin();
-    await expect(loginFlow.emailField).toBeVisible();
+    await expect(loginFlow.loginField).toBeVisible();
   });
 
   test('Step 2 — password field is visible', async () => {
@@ -77,10 +77,10 @@ test.describe('Login Flow', () => {
 
   // ── Step 3: Fill form ─────────────────────────────────────────────────────
 
-  test('Step 3 — email field accepts email input', async () => {
+  test('Step 3 — login field accepts input', async () => {
     await loginFlow.goToLogin();
-    await loginFlow.emailField.fill(VALID_EMAIL);
-    await expect(loginFlow.emailField).toHaveValue(VALID_EMAIL);
+    await loginFlow.loginField.fill(VALID_EMAIL);
+    await expect(loginFlow.loginField).toHaveValue(VALID_EMAIL);
   });
 
   test('Step 3 — password field accepts password input', async () => {

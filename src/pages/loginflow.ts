@@ -15,7 +15,7 @@ export class LoginFlowPage extends BasePage {
 
   // Login page form — core
   readonly loginHeading: Locator;
-  readonly emailField: Locator;
+  readonly loginField: Locator;
   readonly passwordField: Locator;
   readonly submitBtn: Locator;
 
@@ -33,10 +33,10 @@ export class LoginFlowPage extends BasePage {
     // Landing hero
     this.heroHeading = page.getByRole('heading', { name: 'A travel community for people' });
 
-    // Login page form — core
+    // Login page form — core (field accepts email, username, or phone)
     this.loginHeading = page.getByRole('heading', { name: /log in|sign in|welcome back/i });
-    this.emailField = page
-      .getByRole('textbox', { name: /email/i })
+    this.loginField = page
+      .getByRole('textbox', { name: /email|username|phone/i })
       .or(page.locator('input[type="email"]'))
       .or(page.locator('input[name="email"]'))
       .first();
@@ -61,8 +61,8 @@ export class LoginFlowPage extends BasePage {
     await this.waitForPageLoad();
   }
 
-  async login(email: string, password: string): Promise<void> {
-    await this.emailField.fill(email);
+  async login(identifier: string, password: string): Promise<void> {
+    await this.loginField.fill(identifier);
     await this.passwordField.fill(password);
     await this.submitBtn.click();
     await this.waitForPageLoad();
