@@ -210,7 +210,9 @@ test.describe('Flow 3 — Landing → Pre-Login Feed → Single Post View (Explo
 
   test('Edge — feed renders at least one post card on mobile viewport (375px)', { tag: '@exploratory' }, async ({ page }) => {
     await page.setViewportSize({ width: 375, height: 812 });
-    await flow3.goToFeedViaCommunityLink();
+    // On mobile the nav collapses — navigate directly instead of clicking the hidden Community link
+    await page.goto('/trending');
+    await flow3.waitForPageLoad();
     await expect(flow3.feedPostCards.first()).toBeVisible();
   });
 
@@ -245,9 +247,10 @@ test.describe('Flow 3 — Landing → Pre-Login Feed → Single Post View (Explo
   test('Negative — attempting to comment while logged out shows login prompt', { tag: '@exploratory' }, async ({ page }) => {
     await flow3.goToFeedViaCommunityLink();
     await flow3.openFirstPostCard();
-    const commentInput = page.locator('textarea, input[placeholder*="comment" i], input[placeholder*="reply" i]').first();
-    await commentInput.click();
-    const loginPrompt = page.getByRole('dialog').or(page.locator('[class*="modal"], [class*="login"]')).first();
-    await expect(loginPrompt).toBeVisible({ timeout: 5000 });
+    // The comment box is replaced by a "Please login to add a reply" message + Login link
+    // for logged-out users — no textarea is rendered, so assert the prompt directly
+    const loginPrompt = page.getByText(/please login to add a reply/i)
+      .or(page.locator('[class*="comment"] a[href*="/login"]'));
+    await expect(loginPrompt.first()).toBeVisible();
   });
 });
