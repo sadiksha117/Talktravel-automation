@@ -11,11 +11,16 @@ test.describe('Flow 3 — Landing → Pre-Login Feed → Single Post View (Explo
 
   // ── Negative cases ───────────────────────────────────────────────────────
 
-  test('Negative — navigating to a non-existent post URL does not show a blank page', { tag: '@exploratory' }, async ({ page }) => {
+  test('Negative — non-existent post URL returns an HTTP 404 status (not a silent 200)', { tag: '@exploratory' }, async ({ page }) => {
+    let status = 0;
+    page.on('response', response => {
+      if (response.url().includes('/post/this-post-does-not-exist-xyz123abc')) {
+        status = response.status();
+      }
+    });
     await page.goto('/post/this-post-does-not-exist-xyz123abc');
     await page.waitForLoadState('networkidle');
-    const bodyText = await page.locator('body').innerText();
-    expect(bodyText.trim().length).toBeGreaterThan(0);
+    expect(status).toBe(404);
   });
 
   test('Negative — feed page has no 404 network errors on load', { tag: '@exploratory' }, async ({ page }) => {
@@ -61,20 +66,27 @@ test.describe('Flow 3 — Landing → Pre-Login Feed → Single Post View (Explo
     expect(alertFired).toBe(false);
   });
 
-  test('Security — post page URL uses HTTPS (no mixed protocol)', { tag: '@exploratory' }, async ({ page }) => {
+  test('Security — post page response sets Strict-Transport-Security (HSTS) header', { tag: '@exploratory' }, async ({ page }) => {
+    let hsts: string | undefined;
+    page.on('response', response => {
+      if (response.url().includes('/post/')) {
+        hsts = response.headers()['strict-transport-security'];
+      }
+    });
     await flow3.goToFeedViaCommunityLink();
     await flow3.openFirstPostCard();
-    expect(page.url()).toMatch(/^https:/);
+    expect(hsts).toBeDefined();
+    expect(hsts!.length).toBeGreaterThan(0);
   });
 
   // ── Edge cases ───────────────────────────────────────────────────────────
 
-  test('Edge — reloading the single post page keeps the post title visible', { tag: '@exploratory' }, async ({ page }) => {
+  test('Edge — post page browser tab title includes the post H1 heading text', { tag: '@exploratory' }, async ({ page }) => {
     await flow3.goToFeedViaCommunityLink();
     await flow3.openFirstPostCard();
-    await page.reload();
-    await page.waitForLoadState('networkidle');
-    await expect(flow3.postTitle).toBeVisible();
+    const h1Text = (await flow3.postTitle.innerText()).trim().slice(0, 30);
+    const pageTitle = await page.title();
+    expect(pageTitle.toLowerCase()).toContain(h1Text.toLowerCase());
   });
 
   test('Edge — post page has no broken images', { tag: '@exploratory' }, async ({ page }) => {
@@ -132,12 +144,14 @@ test.describe('Flow 3 — Landing → Pre-Login Feed → Single Post View (Explo
     expect(hasProtection).toBe(true);
   });
 
-  test('Security — /trending with 500-character query param does not crash the page', { tag: '@exploratory' }, async ({ page }) => {
-    const longParam = 'a'.repeat(500);
-    await page.goto(`/trending?q=${longParam}`);
-    await page.waitForLoadState('networkidle');
-    const bodyText = await page.locator('body').innerText();
-    expect(bodyText.trim().length).toBeGreaterThan(0);
+  test('Edge — post page has JSON-LD structured data script tag for SEO', { tag: '@exploratory' }, async ({ page }) => {
+    await flow3.goToFeedViaCommunityLink();
+    await flow3.openFirstPostCard();
+    const jsonLd = page.locator('script[type="application/ld+json"]');
+    await expect(jsonLd).toHaveCount(1);
+    const content = await jsonLd.innerText();
+    const parsed = JSON.parse(content);
+    expect(parsed['@type']).toBeTruthy();
   });
 
   test('Security — SQL injection in /trending query param does not crash the page', { tag: '@exploratory' }, async ({ page }) => {
@@ -216,11 +230,15 @@ test.describe('Flow 3 — Landing → Pre-Login Feed → Single Post View (Explo
     await expect(flow3.feedPostCards.first()).toBeVisible();
   });
 
-  test('Edge — Latest tab contains at least one post card after switching', { tag: '@exploratory' }, async () => {
+  test('Edge — Trending and Latest tabs show a different first post (not identical ordering)', { tag: '@exploratory' }, async () => {
     await flow3.goToFeedViaCommunityLink();
+    await flow3.feedPostCards.first().waitFor({ state: 'visible' });
+    const trendingFirst = await flow3.feedPostCards.first().getAttribute('href');
     await flow3.feedTabLatest.click();
     await flow3.waitForPageLoad();
-    await expect(flow3.feedPostCards.first()).toBeVisible();
+    await flow3.feedPostCards.first().waitFor({ state: 'visible' });
+    const latestFirst = await flow3.feedPostCards.first().getAttribute('href');
+    expect(latestFirst).not.toBe(trendingFirst);
   });
 
   test('Negative — direct navigation to /post (no slug) does not return a 500 error', { tag: '@exploratory' }, async ({ page }) => {
