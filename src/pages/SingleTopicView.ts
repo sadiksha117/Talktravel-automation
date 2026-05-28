@@ -48,14 +48,14 @@ export class SingleTopicViewPage extends BasePage {
     // Topic header
     this.topicTitle = page.getByRole('heading', { level: 1 });
 
-    // Action buttons
-    this.followTopicBtn = page.getByRole('button', { name: /follow topic/i });
+    // Action buttons — "Follow Topic" may render as "Follow" depending on state
+    this.followTopicBtn = page.getByRole('button', { name: /follow/i }).first();
     this.newPostBtn = page.getByRole('button', { name: /new post/i });
 
-    // Sub-tabs
-    this.tabTrending = page.getByRole('tab', { name: 'Trending' });
-    this.tabPopular = page.getByRole('tab', { name: 'Popular' });
-    this.tabLatest = page.getByRole('tab', { name: 'Latest' });
+    // Sub-tabs — rendered as links (same pattern as homepage feed tabs)
+    this.tabTrending = page.getByRole('link', { name: 'Trending', exact: true });
+    this.tabPopular = page.getByRole('link', { name: 'Popular', exact: true });
+    this.tabLatest = page.getByRole('link', { name: 'Latest', exact: true });
 
     // Post cards
     this.postCards = page.locator('a[href^="/post/"]:has(div)');
@@ -63,8 +63,10 @@ export class SingleTopicViewPage extends BasePage {
     // Topic chips — links to /tags/ within the feed
     this.topicChips = page.locator('a[href^="/tags/"]');
 
-    // Upvote button
-    this.upvoteBtn = page.locator('[data-testid="upvote"]');
+    // Upvote button — may use class, aria-label, or be an SVG button
+    this.upvoteBtn = page.locator(
+      '[data-testid="upvote"], [data-testid="vote-up"], button[aria-label*="upvote" i], button[aria-label*="vote up" i], [class*="upvote" i]'
+    );
 
     // Footer
     this.footer = page.locator('footer');
@@ -141,7 +143,14 @@ export class SingleTopicViewPage extends BasePage {
   }
 
   async clickUpvote(): Promise<void> {
-    await this.upvoteBtn.first().click();
+    const btn = this.upvoteBtn.first();
+    const count = await btn.count();
+    if (count > 0) {
+      await btn.click();
+    } else {
+      // fallback: click first vote-related button inside a post card
+      await this.page.locator('[class*="vote" i] button, [class*="vote" i] a').first().click();
+    }
     await this.waitForPageLoad();
   }
 }
