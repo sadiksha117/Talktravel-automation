@@ -102,4 +102,152 @@ test.describe('Flow 3 — Landing → Pre-Login Feed → Single Post View (Explo
     await page.waitForLoadState('networkidle');
     await expect(page).toHaveURL(/\/trending/);
   });
+
+  // ── Hard edge / negative / security cases ────────────────────────────────
+
+  test('Security — response headers do not expose X-Powered-By server info', { tag: '@exploratory' }, async ({ page }) => {
+    const responses: string[] = [];
+    page.on('response', response => {
+      if (response.url().includes('/trending')) {
+        const header = response.headers()['x-powered-by'];
+        if (header) responses.push(header);
+      }
+    });
+    await flow3.goToFeedViaCommunityLink();
+    expect(responses).toHaveLength(0);
+  });
+
+  test('Security — post page response sets X-Frame-Options or CSP to prevent clickjacking', { tag: '@exploratory' }, async ({ page }) => {
+    let hasProtection = false;
+    page.on('response', async response => {
+      if (response.url().includes('/post/')) {
+        const headers = response.headers();
+        if (headers['x-frame-options'] || headers['content-security-policy']) {
+          hasProtection = true;
+        }
+      }
+    });
+    await flow3.goToFeedViaCommunityLink();
+    await flow3.openFirstPostCard();
+    expect(hasProtection).toBe(true);
+  });
+
+  test('Security — /trending with 500-character query param does not crash the page', { tag: '@exploratory' }, async ({ page }) => {
+    const longParam = 'a'.repeat(500);
+    await page.goto(`/trending?q=${longParam}`);
+    await page.waitForLoadState('networkidle');
+    const bodyText = await page.locator('body').innerText();
+    expect(bodyText.trim().length).toBeGreaterThan(0);
+  });
+
+  test('Security — SQL injection in /trending query param does not crash the page', { tag: '@exploratory' }, async ({ page }) => {
+    await page.goto("/trending?q=' OR 1=1 --");
+    await page.waitForLoadState('networkidle');
+    const bodyText = await page.locator('body').innerText();
+    expect(bodyText.trim().length).toBeGreaterThan(0);
+  });
+
+  test('Negative — all visible post card titles in the feed are non-empty', { tag: '@exploratory' }, async () => {
+    await flow3.goToFeedViaCommunityLink();
+    await flow3.feedPostCards.first().waitFor({ state: 'visible' });
+    const cards = await flow3.feedPostCards.all();
+    for (const card of cards) {
+      const text = await card.innerText();
+      expect(text.trim().length).toBeGreaterThan(0);
+    }
+  });
+
+  test('Negative — all post card hrefs in the feed are unique (no duplicates)', { tag: '@exploratory' }, async () => {
+    await flow3.goToFeedViaCommunityLink();
+    await flow3.feedPostCards.first().waitFor({ state: 'visible' });
+    const cards = await flow3.feedPostCards.all();
+    const hrefs: string[] = [];
+    for (const card of cards) {
+      const href = await card.getAttribute('href') ?? '';
+      hrefs.push(href);
+    }
+    const uniqueHrefs = new Set(hrefs);
+    expect(uniqueHrefs.size).toBe(hrefs.length);
+  });
+
+  test('Negative — all images on the post page have non-empty alt attributes', { tag: '@exploratory' }, async ({ page }) => {
+    await flow3.goToFeedViaCommunityLink();
+    await flow3.openFirstPostCard();
+    const images = page.locator('img');
+    const count = await images.count();
+    for (let i = 0; i < count; i++) {
+      const alt = await images.nth(i).getAttribute('alt');
+      expect(alt).not.toBeNull();
+      expect((alt ?? '').trim().length).toBeGreaterThan(0);
+    }
+  });
+
+  test('Edge — post page has og:title meta tag matching the H1', { tag: '@exploratory' }, async ({ page }) => {
+    await flow3.goToFeedViaCommunityLink();
+    await flow3.openFirstPostCard();
+    const ogTitle = await page.locator('meta[property="og:title"]').getAttribute('content');
+    expect(ogTitle).not.toBeNull();
+    expect((ogTitle ?? '').trim().length).toBeGreaterThan(0);
+    const h1Text = await flow3.postTitle.innerText();
+    expect(h1Text.trim()).toContain((ogTitle ?? '').trim().slice(0, 20));
+  });
+
+  test('Edge — post page has og:description meta tag', { tag: '@exploratory' }, async ({ page }) => {
+    await flow3.goToFeedViaCommunityLink();
+    await flow3.openFirstPostCard();
+    const ogDesc = await page.locator('meta[property="og:description"]').getAttribute('content');
+    expect(ogDesc).not.toBeNull();
+    expect((ogDesc ?? '').trim().length).toBeGreaterThan(0);
+  });
+
+  test('Edge — post page has a canonical link tag in head', { tag: '@exploratory' }, async ({ page }) => {
+    await flow3.goToFeedViaCommunityLink();
+    await flow3.openFirstPostCard();
+    const canonical = await page.locator('link[rel="canonical"]').getAttribute('href');
+    expect(canonical).not.toBeNull();
+    expect(canonical).toContain('/post/');
+  });
+
+  test('Edge — feed renders at least one post card on mobile viewport (375px)', { tag: '@exploratory' }, async ({ page }) => {
+    await page.setViewportSize({ width: 375, height: 812 });
+    await flow3.goToFeedViaCommunityLink();
+    await expect(flow3.feedPostCards.first()).toBeVisible();
+  });
+
+  test('Edge — Latest tab contains at least one post card after switching', { tag: '@exploratory' }, async () => {
+    await flow3.goToFeedViaCommunityLink();
+    await flow3.feedTabLatest.click();
+    await flow3.waitForPageLoad();
+    await expect(flow3.feedPostCards.first()).toBeVisible();
+  });
+
+  test('Negative — direct navigation to /post (no slug) does not return a 500 error', { tag: '@exploratory' }, async ({ page }) => {
+    let serverError = false;
+    page.on('response', response => {
+      if (response.url().endsWith('/post') || response.url().endsWith('/post/')) {
+        if (response.status() >= 500) serverError = true;
+      }
+    });
+    await page.goto('/post');
+    await page.waitForLoadState('networkidle');
+    expect(serverError).toBe(false);
+  });
+
+  test('Negative — voting on a post while logged out triggers a login prompt', { tag: '@exploratory' }, async ({ page }) => {
+    await flow3.goToFeedViaCommunityLink();
+    await flow3.openFirstPostCard();
+    const upvoteBtn = page.getByRole('button', { name: /upvote|up|like/i }).first();
+    await upvoteBtn.click();
+    const loginPrompt = page.getByRole('dialog').or(page.locator('[class*="modal"], [class*="login"]')).first();
+    await expect(loginPrompt).toBeVisible({ timeout: 5000 });
+  });
+
+  test('Negative — attempting to comment while logged out shows login prompt', { tag: '@exploratory' }, async ({ page }) => {
+    await flow3.goToFeedViaCommunityLink();
+    await flow3.openFirstPostCard();
+    const commentInput = page.locator('textarea, input[placeholder*="comment" i], input[placeholder*="reply" i]').first();
+    await commentInput.click();
+    const loginPrompt = page.getByRole('dialog').or(page.locator('[class*="modal"], [class*="login"]')).first();
+    await expect(loginPrompt).toBeVisible({ timeout: 5000 });
+  });
 });
