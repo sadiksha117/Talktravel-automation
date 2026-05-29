@@ -115,6 +115,44 @@ test.describe('Flow 3 — Landing → Pre-Login Feed → Single Post View (Explo
     await expect(page).toHaveURL(/\/trending/);
   });
 
+  // ── Restored tests (previously replaced in error) ───────────────────────
+
+  test('Negative — navigating to a non-existent post URL does not show a blank page', { tag: '@exploratory' }, async ({ page }) => {
+    await page.goto('/post/this-post-does-not-exist-xyz123abc');
+    await page.waitForLoadState('networkidle');
+    const bodyText = await page.locator('body').innerText();
+    expect(bodyText.trim().length).toBeGreaterThan(0);
+  });
+
+  test('Security — post page URL uses HTTPS (no mixed protocol)', { tag: '@exploratory' }, async ({ page }) => {
+    await flow3.goToFeedViaCommunityLink();
+    await flow3.openFirstPostCard();
+    expect(page.url()).toMatch(/^https:/);
+  });
+
+  test('Edge — reloading the single post page keeps the post title visible', { tag: '@exploratory' }, async ({ page }) => {
+    await flow3.goToFeedViaCommunityLink();
+    await flow3.openFirstPostCard();
+    await page.reload();
+    await page.waitForLoadState('networkidle');
+    await expect(flow3.postTitle).toBeVisible();
+  });
+
+  test('Security — /trending with 500-character query param does not crash the page', { tag: '@exploratory' }, async ({ page }) => {
+    const longParam = 'a'.repeat(500);
+    await page.goto(`/trending?q=${longParam}`);
+    await page.waitForLoadState('networkidle');
+    const bodyText = await page.locator('body').innerText();
+    expect(bodyText.trim().length).toBeGreaterThan(0);
+  });
+
+  test('Edge — Latest tab contains at least one post card after switching', { tag: '@exploratory' }, async () => {
+    await flow3.goToFeedViaCommunityLink();
+    await flow3.feedTabLatest.click();
+    await flow3.waitForPageLoad();
+    await expect(flow3.feedPostCards.first()).toBeVisible();
+  });
+
   // ── Hard edge / negative / security cases ────────────────────────────────
 
   test('Security — response headers do not expose X-Powered-By server info', { tag: '@exploratory' }, async ({ page }) => {
