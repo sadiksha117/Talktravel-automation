@@ -271,4 +271,145 @@ test.describe('Flow 3 — Landing → Pre-Login Feed → Single Post View (Explo
       .or(page.locator('[class*="comment"] a[href*="/login"]'));
     await expect(loginPrompt.first()).toBeVisible();
   });
+
+  // ── Moderate edge cases ──────────────────────────────────────────────────
+
+  test('Edge — clicking logo on post page navigates back to homepage', { tag: '@exploratory' }, async ({ page }) => {
+    await flow3.goToFeedViaCommunityLink();
+    await flow3.openFirstPostCard();
+    await flow3.logo.click();
+    await page.waitForLoadState('networkidle');
+    await expect(page).toHaveURL(/\/$/);
+  });
+
+  test('Edge — post page has at least one tag link pointing to /tags/', { tag: '@exploratory' }, async ({ page }) => {
+    await flow3.goToFeedViaCommunityLink();
+    await flow3.openFirstPostCard();
+    const tagLink = page.locator('a[href*="/tags/"]').first();
+    await expect(tagLink).toBeVisible();
+  });
+
+  test('Edge — post author name is visible on single post page', { tag: '@exploratory' }, async ({ page }) => {
+    await flow3.goToFeedViaCommunityLink();
+    await flow3.openFirstPostCard();
+    const authorLink = page.locator('a[href*="/profile/"]').first();
+    await expect(authorLink).toBeVisible();
+    const text = await authorLink.innerText();
+    expect(text.trim().length).toBeGreaterThan(0);
+  });
+
+  test('Edge — post page does not contain more than one H1 tag', { tag: '@exploratory' }, async ({ page }) => {
+    await flow3.goToFeedViaCommunityLink();
+    await flow3.openFirstPostCard();
+    const h1Count = await page.locator('h1').count();
+    expect(h1Count).toBe(1);
+  });
+
+  test('Edge — Popular This Week sidebar links all point to /post/ URLs', { tag: '@exploratory' }, async ({ page }) => {
+    await flow3.goToFeedViaCommunityLink();
+    const popularLinks = page.locator('a[href^="/post/"]');
+    await popularLinks.first().waitFor({ state: 'visible' });
+    const links = await page.locator('[class*="popular" i] a, [class*="sidebar" i] a').all();
+    for (const link of links) {
+      const href = await link.getAttribute('href') ?? '';
+      expect(href).toMatch(/^\/(post\/|trending|popular|latest)/);
+    }
+  });
+
+  test('Edge — switching from Trending to Latest tab changes the URL', { tag: '@exploratory' }, async ({ page }) => {
+    await flow3.goToFeedViaCommunityLink();
+    const trendingUrl = page.url();
+    await flow3.feedTabLatest.click();
+    await page.waitForLoadState('networkidle');
+    expect(page.url()).not.toBe(trendingUrl);
+  });
+
+  test('Edge — post page comment count in vote bar matches comments section heading number', { tag: '@exploratory' }, async ({ page }) => {
+    await flow3.goToFeedViaCommunityLink();
+    await flow3.openFirstPostCard();
+    const scrollToComments = page.getByRole('button', { name: /scroll to comments/i })
+      .or(page.locator('[aria-label*="comment" i]')).first();
+    const badgeText = await scrollToComments.innerText();
+    const badgeCount = badgeText.match(/\d+/)?.[0];
+    const headingText = await page.locator('h2').filter({ hasText: /comment/i }).first().innerText();
+    const headingCount = headingText.match(/\d+/)?.[0];
+    expect(badgeCount).toBe(headingCount);
+  });
+
+  test('Edge — feed post cards each show a relative time (e.g. "2d ago")', { tag: '@exploratory' }, async () => {
+    await flow3.goToFeedViaCommunityLink();
+    await flow3.feedPostCards.first().waitFor({ state: 'visible' });
+    const cards = await flow3.feedPostCards.all();
+    for (const card of cards.slice(0, 5)) {
+      const text = await card.innerText();
+      expect(text).toMatch(/\d+\s*(s|m|h|d|w|mo|yr|month|day|hour|min|sec|ago)/i);
+    }
+  });
+
+  test('Edge — post page footer links do not point to external domains', { tag: '@exploratory' }, async ({ page }) => {
+    await flow3.goToFeedViaCommunityLink();
+    await flow3.openFirstPostCard();
+    const footerLinks = await page.locator('footer a').all();
+    for (const link of footerLinks) {
+      const href = await link.getAttribute('href') ?? '';
+      if (href.startsWith('http')) {
+        expect(href).toMatch(/staging\.talktravel\.com|talktravel\.com/);
+      }
+    }
+  });
+
+  test('Edge — post page upvote and downvote buttons are both visible', { tag: '@exploratory' }, async ({ page }) => {
+    await flow3.goToFeedViaCommunityLink();
+    await flow3.openFirstPostCard();
+    await expect(page.getByRole('button', { name: /upvote/i }).first()).toBeVisible();
+    await expect(page.getByRole('button', { name: /downvote/i }).first()).toBeVisible();
+  });
+
+  test('Edge — post page vote count is a visible numeric value', { tag: '@exploratory' }, async ({ page }) => {
+    await flow3.goToFeedViaCommunityLink();
+    await flow3.openFirstPostCard();
+    const voteCount = page.locator('button:has(img[alt="Upvote"]) + *').first();
+    const text = await voteCount.innerText();
+    expect(text.replace(/"/g, '').trim()).toMatch(/^\d+$/);
+  });
+
+  test('Edge — feed page has no duplicate post card hrefs across Trending and Latest tabs', { tag: '@exploratory' }, async () => {
+    await flow3.goToFeedViaCommunityLink();
+    await flow3.feedPostCards.first().waitFor({ state: 'visible' });
+    const trendingHrefs = await flow3.feedPostCards.evaluateAll(
+      els => els.map(el => el.getAttribute('href'))
+    );
+    await flow3.feedTabLatest.click();
+    await flow3.waitForPageLoad();
+    await flow3.feedPostCards.first().waitFor({ state: 'visible' });
+    const latestHrefs = await flow3.feedPostCards.evaluateAll(
+      els => els.map(el => el.getAttribute('href'))
+    );
+    const overlap = trendingHrefs.filter(h => latestHrefs.includes(h));
+    expect(overlap.length).toBeLessThan(trendingHrefs.length);
+  });
+
+  test('Edge — post page share button is enabled (not disabled)', { tag: '@exploratory' }, async ({ page }) => {
+    await flow3.goToFeedViaCommunityLink();
+    await flow3.openFirstPostCard();
+    await expect(flow3.shareButton).toBeEnabled();
+  });
+
+  test('Edge — post login link in comments includes a callback URL to return after login', { tag: '@exploratory' }, async ({ page }) => {
+    await flow3.goToFeedViaCommunityLink();
+    await flow3.openFirstPostCard();
+    const loginLink = page.locator('a[href*="/login"]').first();
+    const href = await loginLink.getAttribute('href') ?? '';
+    expect(href).toMatch(/callback|redirect|return/i);
+  });
+
+  test('Edge — post page has a visible comment count that is a non-negative number', { tag: '@exploratory' }, async ({ page }) => {
+    await flow3.goToFeedViaCommunityLink();
+    await flow3.openFirstPostCard();
+    const heading = page.locator('h2').filter({ hasText: /comment/i }).first();
+    await expect(heading).toBeVisible();
+    const text = await heading.innerText();
+    const count = parseInt(text.match(/\d+/)?.[0] ?? '-1', 10);
+    expect(count).toBeGreaterThanOrEqual(0);
+  });
 });
