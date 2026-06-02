@@ -25,6 +25,18 @@ export class HomepageLandingFlowExploratoryPage extends HomepageLandingFlowPage 
   readonly footerTermsLink: Locator;
   readonly footerCopyright: Locator;
 
+  // Exploratory — additional locators for 15 new cases
+  readonly logoLink: Locator;
+  readonly footerFaqLink: Locator;
+  readonly footerLatestLink: Locator;
+  readonly footerHelpLink: Locator;
+  readonly footerGuidelinesLink: Locator;
+  readonly footerSocialX: Locator;
+  readonly footerSocialInstagram: Locator;
+  readonly footerSocialFacebook: Locator;
+  readonly firstPostCardLink: Locator;
+  readonly firstAuthorProfileLink: Locator;
+
   constructor(page: Page) {
     super(page);
 
@@ -50,5 +62,18 @@ export class HomepageLandingFlowExploratoryPage extends HomepageLandingFlowPage 
     this.footerPrivacyLink = page.getByRole('contentinfo').getByRole('link', { name: 'Privacy', exact: true });
     this.footerTermsLink = page.getByRole('contentinfo').getByRole('link', { name: 'Terms', exact: true });
     this.footerCopyright = page.getByRole('contentinfo').getByText(/© \d{4} TalkTravel/);
+
+    // Additional locators
+    this.logoLink = page.getByRole('link', { name: 'TalkTravel talk travel' });
+    this.footerFaqLink = page.getByRole('contentinfo').getByRole('link', { name: 'FAQ', exact: true });
+    this.footerLatestLink = page.getByRole('contentinfo').getByRole('link', { name: 'Latest', exact: true });
+    this.footerHelpLink = page.getByRole('contentinfo').getByRole('link', { name: 'Help', exact: true });
+    this.footerGuidelinesLink = page.getByRole('contentinfo').getByRole('link', { name: 'Guidelines', exact: true });
+    this.footerSocialX = page.getByRole('contentinfo').getByRole('link', { name: 'X' });
+    this.footerSocialInstagram = page.getByRole('contentinfo').getByRole('link', { name: 'Instagram' });
+    this.footerSocialFacebook = page.getByRole('contentinfo').getByRole('link', { name: 'Facebook' });
+    this.firstPostCardLink = page.locator('a[href^="/post/"]').first();
+    this.firstAuthorProfileLink = page.locator('a[href^="/profile/"]').first();
   }
 }
+

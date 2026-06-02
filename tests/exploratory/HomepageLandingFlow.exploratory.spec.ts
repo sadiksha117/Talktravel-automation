@@ -88,4 +88,81 @@ test.describe('Homepage / Trending Landing Flow — Exploratory (Edge & Negative
     await expect(flow.footerPrivacyLink).toHaveAttribute('href', '/privacy-policy');
     await expect(flow.footerTermsLink).toHaveAttribute('href', '/terms-of-service');
   });
+
+  // ── Logo ─────────────────────────────────────────────────────────────────
+
+  test('Edge — logo link href points to root /', { tag: '@exploratory' }, async () => {
+    await expect(flow.logoLink).toHaveAttribute('href', '/');
+  });
+
+  test('Edge — logo link is visible in the header navigation', { tag: '@exploratory' }, async () => {
+    await expect(flow.logoLink).toBeVisible();
+    const logoInsideNav = flow.page.getByRole('navigation').getByRole('link', { name: 'TalkTravel talk travel' });
+    await expect(logoInsideNav).toBeVisible();
+  });
+
+  // ── Direct URL navigation (negative — no redirect to login) ──────────────
+
+  test('Negative — direct navigation to /trending loads without auth redirect', { tag: '@exploratory' }, async ({ page }) => {
+    await page.goto('/trending');
+    await expect(page).toHaveURL('https://staging.talktravel.com/trending');
+    await expect(page).not.toHaveURL(/\/login/);
+  });
+
+  test('Negative — direct navigation to /latest loads without auth redirect', { tag: '@exploratory' }, async ({ page }) => {
+    await page.goto('/latest');
+    await expect(page).toHaveURL('https://staging.talktravel.com/latest');
+    await expect(page).not.toHaveURL(/\/login/);
+  });
+
+  // ── Post card links ───────────────────────────────────────────────────────
+
+  test('Edge — first post card link href uses /post/ pattern', { tag: '@exploratory' }, async () => {
+    await expect(flow.firstPostCardLink).toHaveAttribute('href', /^\/post\/.+/);
+  });
+
+  test('Edge — author profile link href uses /profile/ pattern', { tag: '@exploratory' }, async () => {
+    await expect(flow.firstAuthorProfileLink).toHaveAttribute('href', /^\/profile\/.+/);
+  });
+
+  // ── Footer support & social links ─────────────────────────────────────────
+
+  test('Edge — footer FAQ link href points to /faq', { tag: '@exploratory' }, async () => {
+    await expect(flow.footerFaqLink).toHaveAttribute('href', '/faq');
+  });
+
+  test('Edge — footer Help link href points to /help', { tag: '@exploratory' }, async () => {
+    await expect(flow.footerHelpLink).toHaveAttribute('href', '/help');
+  });
+
+  test('Edge — footer Guidelines link href points to /guidelines', { tag: '@exploratory' }, async () => {
+    await expect(flow.footerGuidelinesLink).toHaveAttribute('href', '/guidelines');
+  });
+
+  test('Edge — footer social links point to correct external platforms', { tag: '@exploratory' }, async () => {
+    await expect(flow.footerSocialX).toHaveAttribute('href', 'https://x.com/talktravelhq');
+    await expect(flow.footerSocialInstagram).toHaveAttribute('href', 'https://www.instagram.com/talktravelhq/');
+    await expect(flow.footerSocialFacebook).toHaveAttribute('href', 'https://www.facebook.com/talktravelhq');
+  });
+
+  // ── Page title & console errors ───────────────────────────────────────────
+
+  test('Edge — /trending page document title is not empty', { tag: '@exploratory' }, async ({ page }) => {
+    const title = await page.title();
+    expect(title.trim().length).toBeGreaterThan(0);
+  });
+
+  test('Edge — /trending page has no console errors on load', { tag: '@exploratory' }, async ({ page }) => {
+    const errors: string[] = [];
+    page.on('console', msg => {
+      if (msg.type() === 'error') errors.push(msg.text());
+    });
+    await page.goto('/trending');
+    await page.waitForLoadState('load');
+    expect(errors).toHaveLength(0);
+  });
+
+  test('Edge — footer Latest link href points to /latest', { tag: '@exploratory' }, async () => {
+    await expect(flow.footerLatestLink).toHaveAttribute('href', '/latest');
+  });
 });
