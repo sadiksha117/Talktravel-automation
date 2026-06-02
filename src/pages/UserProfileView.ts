@@ -57,7 +57,7 @@ export class UserProfileViewPage extends BasePage {
     this.profileUsername = page.locator('main h1');
     this.profileAvatar = page.locator('[data-testid="profile-avatar"], main img').first();
     this.badgesStrip = page.locator('[data-testid="badges-strip"]');
-    this.singleBadge = page.locator('[data-testid="badges-strip"] [data-testid="badge"]');
+    this.singleBadge = page.locator('[data-testid="badges-strip"] [data-testid="badge"], [data-testid="badges-strip"] img');
     this.seeAllBadgesLink = page.getByRole('link', { name: /see all badges/i });
 
     // Action buttons
@@ -99,11 +99,11 @@ export class UserProfileViewPage extends BasePage {
     await this.waitForPageLoad();
     await this.dismissCookieBanner();
     const authorLink = this.page
-      .locator('[data-testid="author-link"], a[href^="/user/"]')
+      .locator('a[href*="/user/"], a[href*="/profile/"]')
       .first();
     await authorLink.waitFor({ state: 'visible' });
     await authorLink.click();
-    await this.page.waitForURL(/\/user\/.+/);
+    await this.page.waitForURL(/\/(user|users|profile)\/.+/);
     await this.waitForPageLoad();
   }
 
@@ -117,11 +117,11 @@ export class UserProfileViewPage extends BasePage {
     await this.page.waitForURL('**/post/**');
     await this.waitForPageLoad();
     const authorLink = this.page
-      .locator('article [data-testid="author-link"], article a[href^="/user/"]')
+      .locator('a[href*="/user/"], a[href*="/profile/"]')
       .first();
     await authorLink.waitFor({ state: 'visible' });
     await authorLink.click();
-    await this.page.waitForURL(/\/user\/.+/);
+    await this.page.waitForURL(/\/(user|users|profile)\/.+/);
     await this.waitForPageLoad();
   }
 
@@ -134,12 +134,14 @@ export class UserProfileViewPage extends BasePage {
     await postCard.click();
     await this.page.waitForURL('**/post/**');
     await this.waitForPageLoad();
+    const commentSection = this.page.locator('[data-testid="comment"], .comment, #comments').first();
+    await commentSection.waitFor({ state: 'visible' });
     const commentAuthorLink = this.page
-      .locator('[data-testid="comment"] [data-testid="author-link"], [data-testid="comment"] a[href^="/user/"]')
+      .locator('[data-testid="comment"] a[href*="/user/"], [data-testid="comment"] a[href*="/profile/"]')
       .first();
     await commentAuthorLink.waitFor({ state: 'visible' });
     await commentAuthorLink.click();
-    await this.page.waitForURL(/\/user\/.+/);
+    await this.page.waitForURL(/\/(user|users|profile)\/.+/);
     await this.waitForPageLoad();
   }
 

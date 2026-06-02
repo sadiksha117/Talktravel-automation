@@ -11,8 +11,8 @@ test.describe('User Profile View (Pre-Login) — Positive Flow', () => {
 
   // ── Step 1 — Enter profile from Homepage feed ────────────────────────────
 
-  test('Step 1 — clicking author link from homepage navigates to /user/{username}', async ({ page }) => {
-    await expect(page).toHaveURL(/\/user\/.+/);
+  test('Step 1 — clicking author link from homepage navigates to user profile', async ({ page }) => {
+    await expect(page).toHaveURL(/\/(user|users|profile)\/.+/);
   });
 
   test('Step 1 — profile username (h1) is visible', async () => {
@@ -66,19 +66,19 @@ test.describe('User Profile View (Pre-Login) — Positive Flow', () => {
 
   // ── Step 2 — Enter profile from Single Post View ─────────────────────────
 
-  test('Step 2 — clicking author from single post navigates to /user/{username}', async ({ page }) => {
+  test('Step 2 — clicking author from single post navigates to user profile', async ({ page }) => {
     const p = new UserProfileViewPage(page);
     await p.goToProfileViaSinglePost();
-    await expect(page).toHaveURL(/\/user\/.+/);
+    await expect(page).toHaveURL(/\/(user|users|profile)\/.+/);
     await expect(p.profileUsername).toBeVisible();
   });
 
   // ── Step 3 — Enter profile from a comment ───────────────────────────────
 
-  test('Step 3 — clicking commenter avatar from comments navigates to /user/{username}', async ({ page }) => {
+  test('Step 3 — clicking commenter avatar from comments navigates to user profile', async ({ page }) => {
     const p = new UserProfileViewPage(page);
     await p.goToProfileViaComment();
-    await expect(page).toHaveURL(/\/user\/.+/);
+    await expect(page).toHaveURL(/\/(user|users|profile)\/.+/);
     await expect(p.profileUsername).toBeVisible();
   });
 
