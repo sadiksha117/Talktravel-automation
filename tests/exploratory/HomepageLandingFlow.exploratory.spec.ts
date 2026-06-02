@@ -165,4 +165,21 @@ test.describe('Homepage / Trending Landing Flow — Exploratory (Edge & Negative
   test('Edge — footer Latest link href points to /latest', { tag: '@exploratory' }, async () => {
     await expect(flow.footerLatestLink).toHaveAttribute('href', '/latest');
   });
+
+  // ── Gated actions — likely to fail (valid negative cases) ─────────────────
+
+  test('Negative — navigating to /for-you while logged out redirects to /login', { tag: '@exploratory' }, async ({ page }) => {
+    await page.goto('/for-you');
+    await page.waitForLoadState('load');
+    await expect(page).toHaveURL(/\/login/);
+  });
+
+  test('Negative — clicking New Post button while logged out redirects to /login', { tag: '@exploratory' }, async ({ page }) => {
+    const newPostBtn = page.getByRole('link', { name: /new post/i })
+      .or(page.getByRole('button', { name: /new post/i }))
+      .first();
+    await newPostBtn.waitFor({ state: 'visible' });
+    await newPostBtn.click();
+    await expect(page).toHaveURL(/\/login/);
+  });
 });

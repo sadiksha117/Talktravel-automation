@@ -76,4 +76,3 @@ export class HomepageLandingFlowExploratoryPage extends HomepageLandingFlowPage 
     this.firstAuthorProfileLink = page.locator('a[href^="/profile/"]').first();
   }
 }
-
