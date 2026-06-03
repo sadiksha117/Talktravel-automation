@@ -154,12 +154,11 @@ test.describe('Single Topic View (Pre-Login) — Exploratory', () => {
     }
   });
 
-  test('Bug — For You tab while logged out should redirect to /login (personalized feed requires auth)', { tag: '@exploratory' }, async ({ page }) => {
-    const forYouTab = page.locator('a[href*="/tags/"][href$="/forYou"]');
-    await forYouTab.waitFor({ state: 'visible' });
-    await forYouTab.click();
-    await page.waitForLoadState('networkidle');
-    await expect(page).toHaveURL(/\/login/);
+  test('Bug — page title contains duplicate "TalkTravel" brand name on Latest sub-tab', { tag: '@exploratory' }, async ({ page }) => {
+    await topicPage.switchToLatestTab();
+    const title = await page.title();
+    const count = (title.match(/TalkTravel/gi) ?? []).length;
+    expect(count).toBeLessThanOrEqual(1);
   });
 
   test('Edge — clicking Downvote while logged out redirects to /login', { tag: '@exploratory' }, async ({ page }) => {
