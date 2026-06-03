@@ -150,13 +150,13 @@ test.describe('Single Topic View (Pre-Login) — Exploratory', () => {
     }
   });
 
-  test('Edge — topic chip links on post cards point to /tags/ routes', { tag: '@exploratory' }, async () => {
+  test('Edge — Trending and Popular sub-tabs show a different first post', { tag: '@exploratory' }, async () => {
     await topicPage.postCards.first().waitFor({ state: 'visible' });
-    const chips = await topicPage.postCardTopicChips.all();
-    for (const chip of chips.slice(0, 5)) {
-      const href = await chip.getAttribute('href') ?? '';
-      expect(href).toMatch(/\/tags\/.+/);
-    }
+    const trendingFirst = await topicPage.postCards.first().getAttribute('href');
+    await topicPage.switchToPopularTab();
+    await topicPage.postCards.first().waitFor({ state: 'visible' });
+    const popularFirst = await topicPage.postCards.first().getAttribute('href');
+    expect(popularFirst).not.toBe(trendingFirst);
   });
 
   test('Edge — clicking Downvote while logged out redirects to /login', { tag: '@exploratory' }, async ({ page }) => {
