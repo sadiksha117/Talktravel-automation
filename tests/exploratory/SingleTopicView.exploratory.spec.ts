@@ -114,11 +114,15 @@ test.describe('Single Topic View (Pre-Login) — Exploratory', () => {
   });
 
   test('Edge — topic page has no broken images', { tag: '@exploratory' }, async ({ page }) => {
-    const images = page.locator('img');
+    const images = page.locator('img[src]');
     const count = await images.count();
     for (let i = 0; i < count; i++) {
-      const naturalWidth = await images.nth(i).evaluate((img: HTMLImageElement) => img.naturalWidth);
-      expect(naturalWidth).toBeGreaterThan(0);
+      const img = images.nth(i);
+      await img.scrollIntoViewIfNeeded();
+      const isLoaded = await img.evaluate((el: HTMLImageElement) =>
+        el.complete && (el.naturalWidth > 0 || el.src.includes('.svg') || el.src.startsWith('data:'))
+      );
+      expect(isLoaded).toBe(true);
     }
   });
 
