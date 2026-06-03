@@ -52,10 +52,10 @@ export class SingleTopicViewPage extends BasePage {
     this.followTopicBtn = page.getByRole('button', { name: /follow/i }).first();
     this.newPostBtn = page.getByRole('button', { name: /new post/i });
 
-    // Sub-tabs — scoped by href to avoid matching footer links with same text
-    this.tabTrending = page.locator('a[href*="/tags/"][href$="/trending"]');
-    this.tabPopular = page.locator('a[href*="/tags/"][href$="/popular"]');
-    this.tabLatest = page.locator('a[href*="/tags/"][href$="/latest"]');
+    // Sub-tabs — :has(img) excludes breadcrumb links which share the same href pattern but contain no img
+    this.tabTrending = page.locator('a[href*="/tags/"][href$="/trending"]:has(img)');
+    this.tabPopular = page.locator('a[href*="/tags/"][href$="/popular"]:has(img)');
+    this.tabLatest = page.locator('a[href*="/tags/"][href$="/latest"]:has(img)');
 
     // Post cards
     this.postCards = page.locator('a[href^="/post/"]:has(div)');

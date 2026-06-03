@@ -19,7 +19,10 @@ export class SingleTopicViewExploratoryPage extends SingleTopicViewPage {
     super(page);
 
     this.tabForYou = page.locator('a[href*="/tags/"][href$="/forYou"]');
-    this.allSubTabLinks = page.locator('a[href*="/tags/"][href$="/trending"], a[href*="/tags/"][href$="/popular"], a[href*="/tags/"][href$="/latest"]');
+    // Scoped to links containing an img — breadcrumb links share the same href pattern but have no img child
+    this.allSubTabLinks = page.locator(
+      'a[href*="/tags/"]:has(img[alt="Trending"]), a[href*="/tags/"]:has(img[alt="Popular"]), a[href*="/tags/"]:has(img[alt="Latest"])'
+    );
 
     this.postCardTopicChips = page.locator('a[href^="/tags/"]');
     this.postAuthorLinks = page.locator('a[href*="/profile/"]');
