@@ -11,8 +11,8 @@ test.describe('User Profile View (Pre-Login) — Positive Flow', () => {
 
   // ── Step 1 — Enter profile from Homepage feed ────────────────────────────
 
-  test('Step 1 — clicking author link from homepage navigates to user profile', async ({ page }) => {
-    await expect(page).toHaveURL(/\/(user|users|profile)\/.+/);
+  test('Step 1 — clicking author link from homepage navigates to /profile/{username}', async ({ page }) => {
+    await expect(page).toHaveURL(/\/profile\/.+/);
   });
 
   test('Step 1 — profile username (h1) is visible', async () => {
@@ -35,13 +35,13 @@ test.describe('User Profile View (Pre-Login) — Positive Flow', () => {
     await expect(profilePage.chatBtn).toBeVisible();
   });
 
-  test('Step 1 — Follow button is visible', async () => {
+  test('Step 1 — Follow/Unfollow button is visible', async () => {
     await expect(profilePage.followBtn).toBeVisible();
   });
 
   test('Step 1 — Posts tab is visible and active by default', async () => {
     await expect(profilePage.postsTab).toBeVisible();
-    await expect(profilePage.postsTab).toHaveAttribute('aria-selected', 'true');
+    await expect(profilePage.postsTab).toHaveClass(/active/);
   });
 
   test('Step 1 — Comments tab is visible', async () => {
@@ -66,19 +66,19 @@ test.describe('User Profile View (Pre-Login) — Positive Flow', () => {
 
   // ── Step 2 — Enter profile from Single Post View ─────────────────────────
 
-  test('Step 2 — clicking author from single post navigates to user profile', async ({ page }) => {
+  test('Step 2 — clicking author from single post navigates to /profile/{username}', async ({ page }) => {
     const p = new UserProfileViewPage(page);
     await p.goToProfileViaSinglePost();
-    await expect(page).toHaveURL(/\/(user|users|profile)\/.+/);
+    await expect(page).toHaveURL(/\/profile\/.+/);
     await expect(p.profileUsername).toBeVisible();
   });
 
   // ── Step 3 — Enter profile from a comment ───────────────────────────────
 
-  test('Step 3 — clicking commenter avatar from comments navigates to user profile', async ({ page }) => {
+  test('Step 3 — clicking commenter avatar from comments navigates to /profile/{username}', async ({ page }) => {
     const p = new UserProfileViewPage(page);
     await p.goToProfileViaComment();
-    await expect(page).toHaveURL(/\/(user|users|profile)\/.+/);
+    await expect(page).toHaveURL(/\/profile\/.+/);
     await expect(p.profileUsername).toBeVisible();
   });
 
@@ -104,22 +104,22 @@ test.describe('User Profile View (Pre-Login) — Positive Flow', () => {
 
   test('Step 5 — clicking Comments tab makes it active', async () => {
     await profilePage.switchToCommentsTab();
-    await expect(profilePage.commentsTab).toHaveAttribute('aria-selected', 'true');
+    await expect(profilePage.commentsTab).toHaveClass(/active/);
   });
 
   test('Step 5 — Posts tab becomes inactive after switching to Comments', async () => {
     await profilePage.switchToCommentsTab();
-    await expect(profilePage.postsTab).toHaveAttribute('aria-selected', 'false');
+    await expect(profilePage.postsTab).not.toHaveClass(/active/);
   });
 
-  test('Step 5 — comment rows are visible after switching to Comments tab', async () => {
+  test('Step 5 — post cards are visible after switching to Comments tab', async () => {
     await profilePage.switchToCommentsTab();
-    await expect(profilePage.profileComments.first()).toBeVisible();
+    await expect(profilePage.postCards.first()).toBeVisible();
   });
 
   // ── Step 6 — Click a post in the Posts tab ───────────────────────────────
 
-  test('Step 6 — clicking a post card navigates to /post/{slug}', async ({ page }) => {
+  test('Step 6 — clicking a post title navigates to /post/{slug}', async ({ page }) => {
     const title = await profilePage.clickFirstPostCard();
     await expect(page).toHaveURL(/\/post\/.+/);
     if (title) {
@@ -130,7 +130,6 @@ test.describe('User Profile View (Pre-Login) — Positive Flow', () => {
   // ── Step 7 — Click a comment in the Comments tab ─────────────────────────
 
   test('Step 7 — clicking a comment row navigates to the parent post', async ({ page }) => {
-    await profilePage.switchToCommentsTab();
     await profilePage.clickFirstComment();
     await expect(page).toHaveURL(/\/post\/.+/);
   });
