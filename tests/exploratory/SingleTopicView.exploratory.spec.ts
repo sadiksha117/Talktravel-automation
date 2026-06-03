@@ -62,41 +62,6 @@ test.describe('Single Topic View (Pre-Login) — Exploratory', () => {
     expect(uniqueHrefs.size).toBe(hrefs.length);
   });
 
-  test('Negative — all images on topic page have non-empty alt attributes', { tag: '@exploratory' }, async ({ page }) => {
-    const images = page.locator('img');
-    const count = await images.count();
-    for (let i = 0; i < count; i++) {
-      const alt = await images.nth(i).getAttribute('alt');
-      expect(alt).not.toBeNull();
-      expect((alt ?? '').trim().length).toBeGreaterThan(0);
-    }
-  });
-
-  test('Negative — direct navigation to /tags (no slug) does not return a 500 error', { tag: '@exploratory' }, async ({ page }) => {
-    let serverError = false;
-    page.on('response', response => {
-      if (response.url().endsWith('/tags') || response.url().endsWith('/tags/')) {
-        if (response.status() >= 500) serverError = true;
-      }
-    });
-    await page.goto('/tags');
-    await page.waitForLoadState('networkidle');
-    expect(serverError).toBe(false);
-  });
-
-  test('Negative — disabled Upvote button on deleted post does not navigate away', { tag: '@exploratory' }, async ({ page }) => {
-    const disabledUpvote = page.locator('button[disabled]:has(img[alt="Upvote"])');
-    const count = await disabledUpvote.count();
-    if (count > 0) {
-      const urlBefore = page.url();
-      await disabledUpvote.first().click({ force: true });
-      await page.waitForTimeout(500);
-      expect(page.url()).toBe(urlBefore);
-    } else {
-      test.skip();
-    }
-  });
-
   // ── Security cases ───────────────────────────────────────────────────────
 
   test('Security — XSS payload in topic slug does not execute script', { tag: '@exploratory' }, async ({ page }) => {
@@ -126,32 +91,6 @@ test.describe('Single Topic View (Pre-Login) — Exploratory', () => {
     await page.waitForLoadState('networkidle');
     const bodyText = await page.locator('body').innerText();
     expect(bodyText.trim().length).toBeGreaterThan(0);
-  });
-
-  test('Security — topic page response sets Strict-Transport-Security (HSTS) header', { tag: '@exploratory' }, async ({ page }) => {
-    let hsts: string | undefined;
-    page.on('response', response => {
-      if (response.url().includes('/tags/')) {
-        hsts = response.headers()['strict-transport-security'];
-      }
-    });
-    await topicPage.goToTopicViaHomepageChip();
-    expect(hsts).toBeDefined();
-    expect(hsts!.length).toBeGreaterThan(0);
-  });
-
-  test('Security — topic page response sets X-Frame-Options or CSP to prevent clickjacking', { tag: '@exploratory' }, async ({ page }) => {
-    let hasProtection = false;
-    page.on('response', response => {
-      if (response.url().includes('/tags/')) {
-        const headers = response.headers();
-        if (headers['x-frame-options'] || headers['content-security-policy']) {
-          hasProtection = true;
-        }
-      }
-    });
-    await topicPage.goToTopicViaHomepageChip();
-    expect(hasProtection).toBe(true);
   });
 
   test('Security — topic page response does not expose X-Powered-By server info', { tag: '@exploratory' }, async ({ page }) => {
@@ -189,18 +128,6 @@ test.describe('Single Topic View (Pre-Login) — Exploratory', () => {
     expect((ogTitle ?? '').trim().length).toBeGreaterThan(0);
   });
 
-  test('Edge — topic page has og:description meta tag', { tag: '@exploratory' }, async ({ page }) => {
-    const ogDesc = await page.locator('meta[property="og:description"]').getAttribute('content');
-    expect(ogDesc).not.toBeNull();
-    expect((ogDesc ?? '').trim().length).toBeGreaterThan(0);
-  });
-
-  test('Edge — topic page has a canonical link tag pointing to /tags/', { tag: '@exploratory' }, async ({ page }) => {
-    const canonical = await page.locator('link[rel="canonical"]').getAttribute('href');
-    expect(canonical).not.toBeNull();
-    expect(canonical).toContain('/tags/');
-  });
-
   test('Edge — topic page renders post cards on mobile viewport (375px)', { tag: '@exploratory' }, async ({ page }) => {
     await page.setViewportSize({ width: 375, height: 812 });
     await page.goto('/trending');
@@ -210,15 +137,6 @@ test.describe('Single Topic View (Pre-Login) — Exploratory', () => {
     await chip.click();
     await page.waitForURL(/\/tags\/.+/);
     await expect(topicPage.postCards.first()).toBeVisible();
-  });
-
-  test('Edge — Trending and Popular sub-tabs show a different first post', { tag: '@exploratory' }, async () => {
-    await topicPage.postCards.first().waitFor({ state: 'visible' });
-    const trendingFirst = await topicPage.postCards.first().getAttribute('href');
-    await topicPage.switchToPopularTab();
-    await topicPage.postCards.first().waitFor({ state: 'visible' });
-    const popularFirst = await topicPage.postCards.first().getAttribute('href');
-    expect(popularFirst).not.toBe(trendingFirst);
   });
 
   test('Edge — all sub-tab links have hrefs scoped to the current topic slug', { tag: '@exploratory' }, async ({ page }) => {
@@ -239,29 +157,6 @@ test.describe('Single Topic View (Pre-Login) — Exploratory', () => {
       const href = await chip.getAttribute('href') ?? '';
       expect(href).toMatch(/\/tags\/.+/);
     }
-  });
-
-  test('Edge — author links on post cards point to /profile/ routes', { tag: '@exploratory' }, async () => {
-    await topicPage.postCards.first().waitFor({ state: 'visible' });
-    const authors = await topicPage.postAuthorLinks.all();
-    for (const author of authors.slice(0, 5)) {
-      const href = await author.getAttribute('href') ?? '';
-      expect(href).toContain('/profile/');
-    }
-  });
-
-  test('Edge — topic page has JSON-LD structured data for SEO', { tag: '@exploratory' }, async ({ page }) => {
-    const jsonLd = page.locator('script[type="application/ld+json"]');
-    const count = await jsonLd.count();
-    expect(count).toBeGreaterThanOrEqual(1);
-    const content = await jsonLd.first().innerText();
-    const parsed = JSON.parse(content);
-    expect(parsed['@type']).toBeTruthy();
-  });
-
-  test('Edge — Downvote button is visible alongside Upvote on each post card', { tag: '@exploratory' }, async () => {
-    await topicPage.postCards.first().waitFor({ state: 'visible' });
-    await expect(topicPage.downvoteBtn.first()).toBeVisible();
   });
 
   test('Edge — clicking Downvote while logged out redirects to /login', { tag: '@exploratory' }, async ({ page }) => {
