@@ -150,13 +150,13 @@ test.describe('Single Topic View (Pre-Login) — Exploratory', () => {
     }
   });
 
-  test('Edge — Trending and Popular sub-tabs show a different first post', { tag: '@exploratory' }, async () => {
-    await topicPage.postCards.first().waitFor({ state: 'visible' });
-    const trendingFirst = await topicPage.postCards.first().getAttribute('href');
-    await topicPage.switchToPopularTab();
-    await topicPage.postCards.first().waitFor({ state: 'visible' });
-    const popularFirst = await topicPage.postCards.first().getAttribute('href');
-    expect(popularFirst).not.toBe(trendingFirst);
+  test('Edge — topic page has JSON-LD structured data script tag for SEO', { tag: '@exploratory' }, async ({ page }) => {
+    const jsonLd = page.locator('script[type="application/ld+json"]');
+    const count = await jsonLd.count();
+    expect(count).toBeGreaterThanOrEqual(1);
+    const content = await jsonLd.first().innerText();
+    const parsed = JSON.parse(content);
+    expect(parsed['@type']).toBeTruthy();
   });
 
   test('Edge — clicking Downvote while logged out redirects to /login', { tag: '@exploratory' }, async ({ page }) => {
