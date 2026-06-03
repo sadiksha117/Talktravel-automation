@@ -150,13 +150,12 @@ test.describe('Single Topic View (Pre-Login) — Exploratory', () => {
     }
   });
 
-  test('Bug — clicking author link inside a post card navigates to profile, not to the post', { tag: '@exploratory' }, async ({ page }) => {
-    await topicPage.postCards.first().waitFor({ state: 'visible' });
-    const authorLink = page.locator('a[href*="/profile/"]').first();
-    const profileHref = await authorLink.getAttribute('href') ?? '';
-    await authorLink.click();
+  test('Bug — For You tab while logged out should redirect to /login (personalized feed requires auth)', { tag: '@exploratory' }, async ({ page }) => {
+    const forYouTab = page.locator('a[href*="/tags/"][href$="/forYou"]');
+    await forYouTab.waitFor({ state: 'visible' });
+    await forYouTab.click();
     await page.waitForLoadState('networkidle');
-    await expect(page).toHaveURL(new RegExp(profileHref.replace(/\//g, '\\/')));
+    await expect(page).toHaveURL(/\/login/);
   });
 
   test('Edge — clicking Downvote while logged out redirects to /login', { tag: '@exploratory' }, async ({ page }) => {
