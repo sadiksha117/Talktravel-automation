@@ -130,10 +130,11 @@ export class UserProfileViewPage extends BasePage {
     await postCard.click();
     await this.page.waitForURL('**/post/**');
     await this.waitForPageLoad();
-    // Comment author links are inside .comment-item or feed-post-meta-user
+    // Comment author links — on single post page, author links use feed-post-meta-user class
+    // Skip the first one (post author at top) and get one from the comments area
     const commentAuthorLink = this.page
-      .locator('.comment-item a[href*="/profile/"], .feed-comment a[href*="/profile/"], .comment a[href*="/profile/"]')
-      .first();
+      .locator('a[class*="meta-user"][href*="/profile/"], a[class*="comment"][href*="/profile/"], [class*="comment"] a[href*="/profile/"]')
+      .nth(1);
     await commentAuthorLink.waitFor({ state: 'visible' });
     await commentAuthorLink.click();
     await this.page.waitForURL(/\/profile\/.+/);
@@ -164,9 +165,12 @@ export class UserProfileViewPage extends BasePage {
 
   async clickFirstComment(): Promise<void> {
     await this.switchToCommentsTab();
-    const firstLink = this.postTitleLinks.first();
-    await firstLink.waitFor({ state: 'visible' });
-    await firstLink.click();
+    // Comments tab may use feed-post-title-link or render as clickable feed-post-item
+    const firstClickable = this.page
+      .locator('a.feed-post-title-link, .feed-post-item[role="link"]')
+      .first();
+    await firstClickable.waitFor({ state: 'visible' });
+    await firstClickable.click();
     await this.page.waitForURL(/\/post\/.+/);
     await this.waitForPageLoad();
   }
