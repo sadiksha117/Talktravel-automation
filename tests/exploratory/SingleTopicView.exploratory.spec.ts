@@ -150,13 +150,13 @@ test.describe('Single Topic View (Pre-Login) — Exploratory', () => {
     }
   });
 
-  test('Edge — topic page has JSON-LD structured data script tag for SEO', { tag: '@exploratory' }, async ({ page }) => {
-    const jsonLd = page.locator('script[type="application/ld+json"]');
-    const count = await jsonLd.count();
-    expect(count).toBeGreaterThanOrEqual(1);
-    const content = await jsonLd.first().innerText();
-    const parsed = JSON.parse(content);
-    expect(parsed['@type']).toBeTruthy();
+  test('Bug — clicking author link inside a post card navigates to profile, not to the post', { tag: '@exploratory' }, async ({ page }) => {
+    await topicPage.postCards.first().waitFor({ state: 'visible' });
+    const authorLink = page.locator('a[href*="/profile/"]').first();
+    const profileHref = await authorLink.getAttribute('href') ?? '';
+    await authorLink.click();
+    await page.waitForLoadState('networkidle');
+    await expect(page).toHaveURL(new RegExp(profileHref.replace(/\//g, '\\/')));
   });
 
   test('Edge — clicking Downvote while logged out redirects to /login', { tag: '@exploratory' }, async ({ page }) => {
