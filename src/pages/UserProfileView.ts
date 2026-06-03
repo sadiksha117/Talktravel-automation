@@ -165,12 +165,10 @@ export class UserProfileViewPage extends BasePage {
 
   async clickFirstComment(): Promise<void> {
     await this.switchToCommentsTab();
-    // Comments tab may use feed-post-title-link or render as clickable feed-post-item
-    const firstClickable = this.page
-      .locator('a.feed-post-title-link, .feed-post-item[role="link"]')
-      .first();
-    await firstClickable.waitFor({ state: 'visible' });
-    await firstClickable.click();
+    // Comments tab renders each comment as <a href="/post/...?target=...">
+    const firstComment = this.page.locator('a[href*="/post/"][href*="target="]').first();
+    await firstComment.waitFor({ state: 'visible' });
+    await firstComment.click();
     await this.page.waitForURL(/\/post\/.+/);
     await this.waitForPageLoad();
   }
