@@ -15,11 +15,14 @@ export class BlogIndexPaginationSearchPage extends BasePage {
   readonly blogHeroText: Locator;
   readonly searchInput: Locator;
   readonly searchSubmitBtn: Locator;
+  // Two "View All Blogs" links exist on /blog — target the first (Latest Articles section)
   readonly viewAllBlogsBtn: Locator;
   readonly articleCards: Locator;
 
-  // Blog Articles (/blog/articles)
+  // Blog Articles (/blog/articles) — pagination
   readonly pagination: Locator;
+  readonly nextPageBtn: Locator;
+  readonly prevPageBtn: Locator;
 
   // Single article
   readonly articleTitle: Locator;
@@ -41,19 +44,21 @@ export class BlogIndexPaginationSearchPage extends BasePage {
     this.headerLogIn = page.getByRole('link', { name: 'Log in', exact: true });
     this.headerJoinFree = page.getByRole('link', { name: 'Join Free', exact: true });
 
-    // Blog Home
+    // Blog Home — use the first "View All Blogs" link (Latest Articles section)
     this.blogHeroHeading = page.getByRole('heading', { name: /Stories, tips & ideas/i });
     this.blogHeroText = page.getByText(/from the travel community/i);
     this.searchInput = page.locator('input[placeholder="Search articles..."]');
     this.searchSubmitBtn = page.locator('button[aria-label="Search"]');
-    this.viewAllBlogsBtn = page.getByText('View All Blogs');
+    this.viewAllBlogsBtn = page.locator('a.bl-section__action').first();
     this.articleCards = page.locator('article');
 
-    // Pagination
-    this.pagination = page.locator('nav[aria-label="Pagination"]');
+    // Pagination — use class-based selector since no aria-label is present
+    this.pagination = page.locator('[class*="pagination"]').first();
+    this.nextPageBtn = page.locator('[class*="next" i], [aria-label*="next" i], [class*="pagination"] a[rel="next"]').first();
+    this.prevPageBtn = page.locator('[class*="prev" i], [aria-label*="prev" i], [class*="pagination"] a[rel="prev"]').first();
 
-    // Single article
-    this.articleTitle = page.locator('article h1');
+    // Single article — h1 may not be inside <article> wrapper
+    this.articleTitle = page.locator('h1').first();
     this.writtenBy = page.getByText(/Written by/i);
 
     // Footer
@@ -87,17 +92,17 @@ export class BlogIndexPaginationSearchPage extends BasePage {
   }
 
   async clickPaginationPage(pageNum: number): Promise<void> {
-    await this.pagination.locator(`button:has-text("${pageNum}")`).click();
+    await this.pagination.locator(`a:has-text("${pageNum}"), button:has-text("${pageNum}")`).first().click();
     await this.waitForPageLoad();
   }
 
   async clickNextPage(): Promise<void> {
-    await this.page.locator('button[aria-label="Next page"]').click();
+    await this.nextPageBtn.click();
     await this.waitForPageLoad();
   }
 
   async clickPreviousPage(): Promise<void> {
-    await this.page.locator('button[aria-label="Previous page"]').click();
+    await this.prevPageBtn.click();
     await this.waitForPageLoad();
   }
 
