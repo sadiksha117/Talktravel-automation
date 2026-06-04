@@ -171,31 +171,27 @@ test.describe('Single Topic View (Pre-Login) — Exploratory', () => {
 
   // --- WILL FAIL ---
 
-  test('Bug — /latest global page title contains duplicate "TalkTravel" brand name', { tag: '@exploratory' }, async ({ page }) => {
-    await page.goto('/latest');
-    await page.waitForLoadState('networkidle');
-    const title = await page.title();
-    const count = (title.match(/TalkTravel/gi) ?? []).length;
-    expect(count).toBeLessThanOrEqual(1);
+  test('SEO — topic page is missing og:description meta tag required for social link previews', { tag: '@exploratory' }, async ({ page }) => {
+    const ogDesc = await page.locator('meta[property="og:description"]').getAttribute('content');
+    expect(ogDesc).not.toBeNull();
+    expect((ogDesc ?? '').trim().length).toBeGreaterThan(0);
   });
 
-  test('Bug — /popular global page title contains duplicate "TalkTravel" brand name', { tag: '@exploratory' }, async ({ page }) => {
-    await page.goto('/popular');
-    await page.waitForLoadState('networkidle');
-    const title = await page.title();
-    const count = (title.match(/TalkTravel/gi) ?? []).length;
-    expect(count).toBeLessThanOrEqual(1);
+  test('SEO — topic page is missing twitter:card meta tag required for Twitter/X link previews', { tag: '@exploratory' }, async ({ page }) => {
+    const twitterCard = await page.locator('meta[name="twitter:card"]').getAttribute('content');
+    expect(twitterCard).not.toBeNull();
+    expect((twitterCard ?? '').trim().length).toBeGreaterThan(0);
   });
 
-  test('Bug — breadcrumb parent link points to a sub-tab URL instead of the parent topic root', { tag: '@exploratory' }, async ({ page }) => {
-    let breadcrumb = page.locator('a[href*="/tags/"]:not(:has(img))').first();
-    if (await breadcrumb.count() === 0) {
-      await page.goto('/tags/HotelAndDestinationReviewSites/trending');
-      await page.waitForLoadState('load');
-      breadcrumb = page.locator('a[href*="/tags/"]:not(:has(img))').first();
+  test('Accessibility — post card images in the feed are missing alt attributes', { tag: '@exploratory' }, async ({ page }) => {
+    await topicPage.postCards.first().waitFor({ state: 'visible' });
+    const postImgs = page.locator('a[href^="/post/"] img');
+    const count = await postImgs.count();
+    expect(count).toBeGreaterThan(0);
+    for (let i = 0; i < count; i++) {
+      const alt = await postImgs.nth(i).getAttribute('alt');
+      expect(alt).not.toBeNull();
     }
-    const href = await breadcrumb.getAttribute('href') ?? '';
-    expect(href).not.toMatch(/\/(trending|popular|latest|forYou)$/);
   });
 
   // --- WILL PASS ---
