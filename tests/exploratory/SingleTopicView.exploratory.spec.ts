@@ -166,4 +166,119 @@ test.describe('Single Topic View (Pre-Login) — Exploratory', () => {
     await topicPage.downvoteBtn.first().click();
     await expect(page).toHaveURL(/\/login/);
   });
+
+  // ── Additional exploratory cases ─────────────────────────────────────────
+
+  // --- WILL FAIL ---
+
+  test('Bug — post card link inner text should not include vote button labels (vote buttons incorrectly inside anchor)', { tag: '@exploratory' }, async () => {
+    await topicPage.postCards.first().waitFor({ state: 'visible' });
+    const cardText = await topicPage.postCards.first().innerText();
+    expect(cardText.toLowerCase()).not.toMatch(/upvote|downvote/);
+  });
+
+  test('Bug — For You tab redirects logged-out users to /login (personalized tab requires auth)', { tag: '@exploratory' }, async ({ page }) => {
+    const forYouTab = page.locator('a[href*="/tags/"][href$="/forYou"]');
+    await forYouTab.waitFor({ state: 'visible' });
+    await forYouTab.click();
+    await page.waitForLoadState('networkidle');
+    await expect(page).toHaveURL(/\/login/);
+  });
+
+  test('Bug — Popular sub-tab page title does not contain duplicate "TalkTravel" brand name', { tag: '@exploratory' }, async ({ page }) => {
+    await topicPage.switchToPopularTab();
+    const title = await page.title();
+    const count = (title.match(/TalkTravel/gi) ?? []).length;
+    expect(count).toBeLessThanOrEqual(1);
+  });
+
+  // --- WILL PASS ---
+
+  test('Edge — topic description paragraph is visible and non-empty', { tag: '@exploratory' }, async ({ page }) => {
+    const description = page.locator('main p, [data-testid="topic-description"]').first();
+    await expect(description).toBeVisible();
+    const text = await description.innerText();
+    expect(text.trim().length).toBeGreaterThan(0);
+  });
+
+  test('Edge — breadcrumb link is visible and navigates to a valid /tags/ route', { tag: '@exploratory' }, async ({ page }) => {
+    const breadcrumb = page.locator('a[href*="/tags/"]').first();
+    await breadcrumb.waitFor({ state: 'visible' });
+    const href = await breadcrumb.getAttribute('href') ?? '';
+    expect(href).toMatch(/\/tags\/.+/);
+  });
+
+  test('Negative — switching between all three sub-tabs does not trigger console errors', { tag: '@exploratory' }, async ({ page }) => {
+    const errors: string[] = [];
+    page.on('console', msg => {
+      if (msg.type() === 'error') errors.push(msg.text());
+    });
+    await topicPage.switchToPopularTab();
+    await topicPage.switchToLatestTab();
+    await topicPage.switchToTrendingTab();
+    expect(errors).toHaveLength(0);
+  });
+
+  test('Edge — vote count on each visible post card is a valid non-negative integer', { tag: '@exploratory' }, async ({ page }) => {
+    await topicPage.postCards.first().waitFor({ state: 'visible' });
+    const counts = await page.locator('button:has(img[alt="Upvote"]) + *').allInnerTexts();
+    for (const raw of counts) {
+      const num = parseInt(raw.replace(/[^0-9-]/g, ''), 10);
+      expect(isNaN(num)).toBe(false);
+      expect(num).toBeGreaterThanOrEqual(0);
+    }
+  });
+
+  test('Negative — post cards do not open in a new browser tab', { tag: '@exploratory' }, async () => {
+    await topicPage.postCards.first().waitFor({ state: 'visible' });
+    const target = await topicPage.postCards.first().getAttribute('target');
+    expect(target).not.toBe('_blank');
+  });
+
+  test('Edge — all visible post cards have both an Upvote and a Downvote button', { tag: '@exploratory' }, async ({ page }) => {
+    await topicPage.postCards.first().waitFor({ state: 'visible' });
+    const upvotes = await page.getByRole('button', { name: 'Upvote' }).count();
+    const downvotes = await page.getByRole('button', { name: 'Downvote' }).count();
+    expect(upvotes).toBeGreaterThan(0);
+    expect(downvotes).toBe(upvotes);
+  });
+
+  test('Edge — Follow button is still visible after navigating back from /login', { tag: '@exploratory' }, async ({ page }) => {
+    await topicPage.clickFollowTopic();
+    await expect(page).toHaveURL(/\/login/);
+    await page.goBack();
+    await expect(page).toHaveURL(/\/tags\/.+/);
+    await expect(topicPage.followTopicBtn).toBeVisible();
+  });
+
+  test('Security — topic page response sets X-Content-Type-Options: nosniff header', { tag: '@exploratory' }, async ({ page }) => {
+    let headerValue: string | undefined;
+    page.on('response', response => {
+      if (response.url().includes('/tags/')) {
+        headerValue = response.headers()['x-content-type-options'];
+      }
+    });
+    await topicPage.goToTopicViaHomepageChip();
+    expect(headerValue).toBe('nosniff');
+  });
+
+  test('Edge — topic page has a canonical link tag pointing to the current URL', { tag: '@exploratory' }, async ({ page }) => {
+    const canonical = await page.locator('link[rel="canonical"]').getAttribute('href');
+    expect(canonical).not.toBeNull();
+    expect(canonical).toContain('/tags/');
+  });
+
+  test('Negative — direct navigation to /tags/{slug}/popular does not return a 500 error', { tag: '@exploratory' }, async ({ page }) => {
+    let serverError = false;
+    const currentUrl = page.url();
+    const slug = currentUrl.split('/tags/')[1]?.split('/')[0];
+    page.on('response', response => {
+      if (response.url().includes(`/tags/${slug}/popular`)) {
+        if (response.status() >= 500) serverError = true;
+      }
+    });
+    await page.goto(`/tags/${slug}/popular`);
+    await page.waitForLoadState('networkidle');
+    expect(serverError).toBe(false);
+  });
 });
