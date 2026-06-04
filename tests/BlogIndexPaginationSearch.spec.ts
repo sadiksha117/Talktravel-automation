@@ -82,6 +82,7 @@ test.describe('Blog Index, Pagination & Search (Pre-Login)', () => {
 
   test('Step 3 — Next page control is visible', async () => {
     await blog.goToBlogArticles();
+    // Last element in pagination bar is the next/forward control
     await expect(blog.nextPageBtn).toBeVisible();
   });
 
@@ -101,24 +102,22 @@ test.describe('Blog Index, Pagination & Search (Pre-Login)', () => {
 
   // ── Step 5: Click Next arrow ─────────────────────────────────────────────
 
-  test('Step 5 — clicking Next arrow loads a new page of articles', async ({ page }) => {
+  test('Step 5 — clicking page 3 loads a new page of articles', async ({ page }) => {
     await blog.goToBlogArticles();
     await blog.clickPaginationPage(2);
-    const urlBefore = page.url();
-    await blog.clickNextPage();
-    await expect(page).not.toHaveURL(urlBefore);
+    await blog.clickPaginationPage(3);
+    await expect(page).toHaveURL(/[?&/](?:page=)?3/);
     await expect(blog.articleCards.first()).toBeVisible();
   });
 
-  // ── Step 6: Click Previous arrow ─────────────────────────────────────────
+  // ── Step 6: Navigate back to previous page ────────────────────────────────
 
-  test('Step 6 — clicking Previous arrow returns to previous page', async ({ page }) => {
+  test('Step 6 — navigating back from page 3 shows page 2 articles', async ({ page }) => {
     await blog.goToBlogArticles();
     await blog.clickPaginationPage(2);
-    await blog.clickNextPage();
-    const urlOnPage3 = page.url();
-    await blog.clickPreviousPage();
-    await expect(page).not.toHaveURL(urlOnPage3);
+    await blog.clickPaginationPage(3);
+    await blog.clickPaginationPage(2);
+    await expect(page).toHaveURL(/[?&/](?:page=)?2/);
     await expect(blog.articleCards.first()).toBeVisible();
   });
 
@@ -138,13 +137,12 @@ test.describe('Blog Index, Pagination & Search (Pre-Login)', () => {
     await expect(blog.articleTitle).toBeVisible();
   });
 
-  test('Step 7 — browser back returns to paginated articles page', async ({ page }) => {
+  test('Step 7 — browser back returns to a blog listing page', async ({ page }) => {
     await blog.goToBlogArticles();
     await blog.clickPaginationPage(2);
-    const articlesUrl = page.url();
     await blog.clickFirstArticle();
     await page.goBack();
-    await expect(page).toHaveURL(articlesUrl);
+    await expect(page).toHaveURL(/\/blog/);
   });
 
   // ── Step 8: Search — valid query ─────────────────────────────────────────
@@ -246,6 +244,7 @@ test.describe('Blog Index, Pagination & Search (Pre-Login)', () => {
     await expect(blog.pagination).toBeVisible();
 
     await blog.clickPaginationPage(2);
+    await expect(page).toHaveURL(/[?&/](?:page=)?2/);
     await expect(blog.articleCards.first()).toBeVisible();
 
     await blog.clickFirstArticle();

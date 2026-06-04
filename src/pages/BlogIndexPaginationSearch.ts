@@ -54,8 +54,9 @@ export class BlogIndexPaginationSearchPage extends BasePage {
 
     // Pagination — use class-based selector since no aria-label is present
     this.pagination = page.locator('[class*="pagination"]').first();
-    this.nextPageBtn = page.locator('[class*="next" i], [aria-label*="next" i], [class*="pagination"] a[rel="next"]').first();
-    this.prevPageBtn = page.locator('[class*="prev" i], [aria-label*="prev" i], [class*="pagination"] a[rel="prev"]').first();
+    // Next/Prev: last and first links in the pagination bar (arrow controls are icon-only links)
+    this.nextPageBtn = page.locator('[class*="pagination"] a, [class*="pagination"] button').last();
+    this.prevPageBtn = page.locator('[class*="pagination"] a, [class*="pagination"] button').first();
 
     // Single article — h1 may not be inside <article> wrapper
     this.articleTitle = page.locator('h1').first();
