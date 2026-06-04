@@ -283,4 +283,12 @@ test.describe('Single Topic View (Pre-Login) — Exploratory', () => {
     await page.waitForLoadState('networkidle');
     expect(serverError).toBe(false);
   });
+
+  test('Edge — topic page URL does not change after page reload (no redirect loop)', { tag: '@exploratory' }, async ({ page }) => {
+    const urlBefore = page.url();
+    await page.reload();
+    await page.waitForLoadState('networkidle');
+    const urlAfter = page.url();
+    expect(urlAfter).toBe(urlBefore);
+  });
 });
