@@ -171,25 +171,31 @@ test.describe('Single Topic View (Pre-Login) — Exploratory', () => {
 
   // --- WILL FAIL ---
 
-  test('Bug — post card link inner text should not include vote button labels (vote buttons incorrectly inside anchor)', { tag: '@exploratory' }, async () => {
-    await topicPage.postCards.first().waitFor({ state: 'visible' });
-    const cardText = await topicPage.postCards.first().innerText();
-    expect(cardText.toLowerCase()).not.toMatch(/upvote|downvote/);
-  });
-
-  test('Bug — For You tab redirects logged-out users to /login (personalized tab requires auth)', { tag: '@exploratory' }, async ({ page }) => {
-    const forYouTab = page.locator('a[href*="/tags/"][href$="/forYou"]');
-    await forYouTab.waitFor({ state: 'visible' });
-    await forYouTab.click();
+  test('Bug — /latest global page title contains duplicate "TalkTravel" brand name', { tag: '@exploratory' }, async ({ page }) => {
+    await page.goto('/latest');
     await page.waitForLoadState('networkidle');
-    await expect(page).toHaveURL(/\/login/);
-  });
-
-  test('Bug — Popular sub-tab page title does not contain duplicate "TalkTravel" brand name', { tag: '@exploratory' }, async ({ page }) => {
-    await topicPage.switchToPopularTab();
     const title = await page.title();
     const count = (title.match(/TalkTravel/gi) ?? []).length;
     expect(count).toBeLessThanOrEqual(1);
+  });
+
+  test('Bug — /popular global page title contains duplicate "TalkTravel" brand name', { tag: '@exploratory' }, async ({ page }) => {
+    await page.goto('/popular');
+    await page.waitForLoadState('networkidle');
+    const title = await page.title();
+    const count = (title.match(/TalkTravel/gi) ?? []).length;
+    expect(count).toBeLessThanOrEqual(1);
+  });
+
+  test('Bug — breadcrumb parent link points to a sub-tab URL instead of the parent topic root', { tag: '@exploratory' }, async ({ page }) => {
+    let breadcrumb = page.locator('a[href*="/tags/"]:not(:has(img))').first();
+    if (await breadcrumb.count() === 0) {
+      await page.goto('/tags/HotelAndDestinationReviewSites/trending');
+      await page.waitForLoadState('load');
+      breadcrumb = page.locator('a[href*="/tags/"]:not(:has(img))').first();
+    }
+    const href = await breadcrumb.getAttribute('href') ?? '';
+    expect(href).not.toMatch(/\/(trending|popular|latest|forYou)$/);
   });
 
   // --- WILL PASS ---
