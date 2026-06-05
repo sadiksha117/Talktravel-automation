@@ -290,4 +290,119 @@ test.describe('Single Topic View (Pre-Login) — Exploratory', () => {
     const urlAfter = page.url();
     expect(urlAfter).toBe(urlBefore);
   });
+
+  // ── Additional 15 exploratory cases ──────────────────────────────────────
+
+  // --- WILL FAIL ---
+
+  test('Bug — breadcrumb parent link href includes a sub-tab suffix instead of the topic root', { tag: '@exploratory' }, async ({ page }) => {
+    const breadcrumb = page.locator('a[href*="/tags/"]:not(:has(img))').first();
+    await breadcrumb.waitFor({ state: 'visible' });
+    const href = await breadcrumb.getAttribute('href') ?? '';
+    expect(href).not.toMatch(/\/(trending|popular|latest|forYou)$/);
+  });
+
+  test('Accessibility — post card timestamps should use a semantic time element with datetime attribute', { tag: '@exploratory' }, async ({ page }) => {
+    await topicPage.postCards.first().waitFor({ state: 'visible' });
+    const timeEls = page.locator('a[href^="/post/"] time[datetime]');
+    const count = await timeEls.count();
+    expect(count).toBeGreaterThan(0);
+  });
+
+  // --- WILL PASS ---
+
+  test('Edge — footer contains a visible Terms of Service link', { tag: '@exploratory' }, async ({ page }) => {
+    const termsLink = page.locator('footer a[href*="terms"]');
+    await expect(termsLink).toBeVisible();
+  });
+
+  test('Edge — footer contains a visible Privacy Policy link', { tag: '@exploratory' }, async ({ page }) => {
+    const privacyLink = page.locator('footer a[href*="privacy"]');
+    await expect(privacyLink).toBeVisible();
+  });
+
+  test('Edge — header Log In link has href pointing to /login', { tag: '@exploratory' }, async ({ page }) => {
+    const loginLink = page.getByRole('navigation').getByRole('link', { name: 'Log in' });
+    const href = await loginLink.getAttribute('href') ?? '';
+    expect(href).toContain('/login');
+  });
+
+  test('Edge — New Post button while logged out redirects to /login', { tag: '@exploratory' }, async ({ page }) => {
+    await topicPage.newPostBtn.waitFor({ state: 'visible' });
+    await topicPage.newPostBtn.click();
+    await expect(page).toHaveURL(/\/login/);
+  });
+
+  test('Edge — topic feed renders at least one post card immediately on page load', { tag: '@exploratory' }, async () => {
+    await expect(topicPage.postCards.first()).toBeVisible();
+  });
+
+  test('Negative — page title does not contain "undefined" or "null"', { tag: '@exploratory' }, async ({ page }) => {
+    const title = await page.title();
+    expect(title.toLowerCase()).not.toContain('undefined');
+    expect(title.toLowerCase()).not.toContain('null');
+  });
+
+  test('Negative — post card inner text does not contain raw HTML tags', { tag: '@exploratory' }, async () => {
+    await topicPage.postCards.first().waitFor({ state: 'visible' });
+    const cards = await topicPage.postCards.all();
+    for (const card of cards) {
+      const text = await card.innerText();
+      expect(text).not.toMatch(/<[a-z][\s\S]*?>/i);
+    }
+  });
+
+  test('Edge — all visible footer links have non-empty valid href attributes', { tag: '@exploratory' }, async ({ page }) => {
+    const footerLinks = page.locator('footer a[href]');
+    const count = await footerLinks.count();
+    expect(count).toBeGreaterThan(0);
+    for (let i = 0; i < count; i++) {
+      const href = (await footerLinks.nth(i).getAttribute('href') ?? '').trim();
+      expect(href.length).toBeGreaterThan(0);
+      expect(href).not.toBe('#');
+    }
+  });
+
+  test('Security — external footer social links open in a new tab', { tag: '@exploratory' }, async ({ page }) => {
+    const externalLinks = page.locator('footer a[href^="https://"]');
+    const count = await externalLinks.count();
+    expect(count).toBeGreaterThan(0);
+    for (let i = 0; i < count; i++) {
+      const target = await externalLinks.nth(i).getAttribute('target');
+      expect(target).toBe('_blank');
+    }
+  });
+
+  test('Edge — each visible post card contains an author link pointing to /profile/', { tag: '@exploratory' }, async ({ page }) => {
+    await topicPage.postCards.first().waitFor({ state: 'visible' });
+    const cards = await topicPage.postCards.all();
+    for (const card of cards) {
+      const authorHref = await card.locator('a[href*="/profile/"]').first().getAttribute('href') ?? '';
+      expect(authorHref).toContain('/profile/');
+    }
+  });
+
+  test('Edge — topic page has exactly one h1 heading element', { tag: '@exploratory' }, async ({ page }) => {
+    const h1Count = await page.locator('h1').count();
+    expect(h1Count).toBe(1);
+  });
+
+  test('Edge — switching to Latest sub-tab updates the URL to include /latest', { tag: '@exploratory' }, async ({ page }) => {
+    await topicPage.switchToLatestTab();
+    expect(page.url()).toContain('/latest');
+  });
+
+  test('Negative — direct navigation to /tags/{slug}/latest does not return a 500 error', { tag: '@exploratory' }, async ({ page }) => {
+    let serverError = false;
+    const currentUrl = page.url();
+    const slug = currentUrl.split('/tags/')[1]?.split('/')[0];
+    page.on('response', response => {
+      if (response.url().includes(`/tags/${slug}/latest`)) {
+        if (response.status() >= 500) serverError = true;
+      }
+    });
+    await page.goto(`/tags/${slug}/latest`);
+    await page.waitForLoadState('load');
+    expect(serverError).toBe(false);
+  });
 });
