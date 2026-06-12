@@ -117,7 +117,8 @@ export class PostLoginSinglePostViewPage extends BasePage {
     await firstCard.waitFor({ state: 'visible' });
     await firstCard.click();
     await this.page.waitForURL('**/post/**', { timeout: 30000 });
-    await this.waitForPageLoad();
+    // Wait for full React/auth hydration so Quill switches to contenteditable="true"
+    await this.page.waitForLoadState('networkidle', { timeout: 30000 }).catch(() => {});
   }
 
   async dismissCookieBanner(): Promise<void> {
@@ -141,16 +142,23 @@ export class PostLoginSinglePostViewPage extends BasePage {
     // Scroll to bottom so the comment editor mounts
     await this.page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
 
-    // Wait up to 3s for Quill to switch from contenteditable="false" (server/logged-out)
-    // to contenteditable="true" (after React/auth hydration).
-    try {
-      await this.page.waitForFunction(
-        () => document.querySelector('.ql-editor')?.getAttribute('contenteditable') === 'true',
-        { timeout: 3000 }
-      );
-      return this.page.locator('.ql-editor[contenteditable="true"]').first();
-    } catch {
-      // Quill didn't become editable — fall through to generic probes
+    const quill = this.page.locator('.ql-editor').first();
+    const quillVisible = await quill.isVisible({ timeout: 5000 }).catch(() => false);
+
+    if (quillVisible) {
+      // Click the editor — many Quill instances only activate (flip contenteditable)
+      // after receiving a click/focus event, even when the user is authenticated.
+      await quill.click({ force: true, timeout: 5000 }).catch(() => {});
+
+      try {
+        await this.page.waitForFunction(
+          () => document.querySelector('.ql-editor')?.getAttribute('contenteditable') === 'true',
+          { timeout: 8000 }
+        );
+        return this.page.locator('.ql-editor[contenteditable="true"]').first();
+      } catch {
+        // Quill still not editable after click — fall through
+      }
     }
 
     const editorSelectors = [
@@ -166,7 +174,7 @@ export class PostLoginSinglePostViewPage extends BasePage {
 
     throw new Error(
       'Comment input not found or still showing "Please login" placeholder. ' +
-      'The Quill editor may not have switched to editable mode — check auth state on the post page.'
+      'The Quill editor did not activate after click — check auth state on the post page.'
     );
   }
 
