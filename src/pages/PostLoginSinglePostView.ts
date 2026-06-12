@@ -35,9 +35,15 @@ export class PostLoginSinglePostViewPage extends BasePage {
   constructor(page: Page) {
     super(page);
 
-    this.postTitle   = page.getByRole('heading', { level: 1 });
-    this.postAuthor  = page.locator('a[href*="/profile/"]').first();
-    this.topicChip   = page.locator('a[href*="/tags/"]').first();
+    this.postTitle  = page.getByRole('heading', { level: 1 });
+    // Author link is visible in the post body — exclude the hidden nav-dropdown items
+    this.postAuthor = page.locator('a[class*="meta-user"][href*="/profile/"]')
+      .or(page.locator('a[href*="/profile/"]:not(.dropdown-item):not(.nav-dropdown-link)').first())
+      .first();
+    // Tag chips are a.tag-default (confirmed from UserProfileView) — exclude nav dropdown links
+    this.topicChip  = page.locator('a.tag-default[href*="/tags/"]')
+      .or(page.locator('a[href*="/tags/"]:not(.nav-dropdown-link):not(.dropdown-item)').first())
+      .first();
 
     // Vote buttons — confirmed attribute pattern from error output
     this.upvoteBtn   = page.locator('button[data-action="upvote"]').first();
@@ -132,63 +138,52 @@ export class PostLoginSinglePostViewPage extends BasePage {
   // Scrolls to the comments section and probes for the comment editor using
   // multiple strategies since the editor is lazy-mounted
   async getCommentInput(): Promise<Locator> {
-    // Scroll to the comments heading
+    // Scroll to the comments heading so the editor mounts
     const commentsH2 = this.page.locator('h2').filter({ hasText: /comment/i }).first();
     if (await commentsH2.isVisible({ timeout: 3000 }).catch(() => false)) {
       await commentsH2.scrollIntoViewIfNeeded();
     } else {
       await this.page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
     }
-    await this.page.waitForTimeout(600);
 
-    // Probe all editor types in priority order
+    // The app uses Quill (class="ql-editor"). After page load the server renders
+    // contenteditable="false" (logged-out placeholder). After React/auth hydration it
+    // switches to contenteditable="true". Wait up to 15s for that transition.
+    const quillEditor = this.page.locator('.ql-editor').first();
+    if (await quillEditor.isVisible({ timeout: 3000 }).catch(() => false)) {
+      try {
+        await this.page.waitForFunction(
+          () => document.querySelector('.ql-editor')?.getAttribute('contenteditable') === 'true',
+          { timeout: 15000 }
+        );
+        return this.page.locator('.ql-editor[contenteditable="true"]').first();
+      } catch {
+        // Quill editor didn't become editable — user may not be authenticated for comments
+      }
+    }
+
+    // Generic fallback probes
     const editorSelectors = [
+      '.ql-editor[contenteditable="true"]',
       '[contenteditable="true"]',
-      '[contenteditable=""]',
-      '[contenteditable]',
-      '.ProseMirror',
-      '.ql-editor',
       'textarea',
       '[role="textbox"]',
-      'input[type="text"]:not([placeholder*="search" i])',
     ];
     for (const sel of editorSelectors) {
       const el = this.page.locator(sel).first();
       if (await el.isVisible({ timeout: 1000 }).catch(() => false)) return el;
     }
 
-    // If no editor found yet, try clicking a trigger element to activate the editor
-    const triggerSelectors = [
-      // "Scroll to comments" button on the post may activate the reply area
-      'button[aria-label*="scroll" i]',
-      // Common "write a reply" placeholder areas
-      'p[data-placeholder]',
-      '[class*="reply-placeholder"], [class*="comment-placeholder"]',
-      '[class*="reply-area"], [class*="comment-area"]',
-      // Tiptap/ProseMirror empty paragraph used as placeholder
-      'p.is-editor-empty',
-    ];
-    for (const sel of triggerSelectors) {
-      const el = this.page.locator(sel).first();
-      if (await el.isVisible({ timeout: 1000 }).catch(() => false)) {
-        await el.click({ timeout: 2000 });
-        await this.page.waitForTimeout(400);
-        for (const edSel of editorSelectors) {
-          const editor = this.page.locator(edSel).first();
-          if (await editor.isVisible({ timeout: 1000 }).catch(() => false)) return editor;
-        }
-      }
-    }
-
     throw new Error(
-      'Comment input not found. The app may require a different interaction to activate the editor. ' +
-      'Inspect the post page when logged in to identify the correct selector.'
+      'Comment input not found or still showing "Please login" placeholder. ' +
+      'The Quill editor may not have switched to editable mode — check auth state on the post page.'
     );
   }
 
   async addComment(text: string): Promise<void> {
     const input = await this.getCommentInput();
     await input.click();
+    // Quill editors respond better to keyboard type than fill() for rich-text content
     await input.fill(text);
     const submitBtn = this.page
       .getByRole('button', { name: /^reply$/i })
@@ -198,18 +193,22 @@ export class PostLoginSinglePostViewPage extends BasePage {
     await submitBtn.click();
   }
 
-  // Navigate to the own-user profile via the header avatar link
+  // Navigate to the own-user profile.
+  // The own profile link is inside a hidden nav dropdown — extract href via evaluate
+  // rather than clicking, which avoids opening/closing the dropdown.
   async goToOwnProfile(): Promise<void> {
-    // The logged-in user's avatar/profile link appears in the site header
-    const ownLink = this.page
-      .locator('header a[href*="/profile/"], nav a[href*="/profile/"]')
-      .last();
-    const href = await ownLink.getAttribute('href', { timeout: 5000 }).catch(() => null);
+    const href = await this.page.evaluate(() => {
+      const link = document.querySelector('a.dropdown-item[href*="/profile/"]');
+      return link?.getAttribute('href') ?? null;
+    });
     if (href) {
       await this.page.goto(`https://staging.talktravel.com${href}`, { waitUntil: 'domcontentloaded' });
     } else {
-      // Fallback: click the avatar and wait for profile URL
-      await ownLink.click();
+      // Fallback: open the account dropdown to expose the link, then click it
+      const accountToggle = this.page.locator('[data-bs-toggle="dropdown"], .account-toggle, .avatar-btn').first();
+      await accountToggle.click({ timeout: 5000 });
+      const profileLink = this.page.locator('a.dropdown-item[href*="/profile/"]').first();
+      await profileLink.click();
       await this.page.waitForURL(/\/profile\/.+/, { timeout: 15000 });
     }
     await this.waitForPageLoad();
