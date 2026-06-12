@@ -138,32 +138,21 @@ export class PostLoginSinglePostViewPage extends BasePage {
   // Scrolls to the comments section and probes for the comment editor using
   // multiple strategies since the editor is lazy-mounted
   async getCommentInput(): Promise<Locator> {
-    // Scroll to the comments heading so the editor mounts
-    const commentsH2 = this.page.locator('h2').filter({ hasText: /comment/i }).first();
-    if (await commentsH2.isVisible({ timeout: 3000 }).catch(() => false)) {
-      await commentsH2.scrollIntoViewIfNeeded();
-    } else {
-      await this.page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
+    // Scroll to bottom so the comment editor mounts
+    await this.page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
+
+    // Wait up to 3s for Quill to switch from contenteditable="false" (server/logged-out)
+    // to contenteditable="true" (after React/auth hydration).
+    try {
+      await this.page.waitForFunction(
+        () => document.querySelector('.ql-editor')?.getAttribute('contenteditable') === 'true',
+        { timeout: 3000 }
+      );
+      return this.page.locator('.ql-editor[contenteditable="true"]').first();
+    } catch {
+      // Quill didn't become editable — fall through to generic probes
     }
 
-    // The app uses Quill (class="ql-editor"). After page load the server renders
-    // contenteditable="false" (logged-out placeholder). After React/auth hydration it
-    // switches to contenteditable="true". Wait up to 5s for that transition.
-    // Keep this short — beforeEach already uses ~50s, so budget is tight.
-    const quillEditor = this.page.locator('.ql-editor').first();
-    if (await quillEditor.isVisible({ timeout: 3000 }).catch(() => false)) {
-      try {
-        await this.page.waitForFunction(
-          () => document.querySelector('.ql-editor')?.getAttribute('contenteditable') === 'true',
-          { timeout: 5000 }
-        );
-        return this.page.locator('.ql-editor[contenteditable="true"]').first();
-      } catch {
-        // Quill editor didn't become editable within 5s — still showing logged-out state
-      }
-    }
-
-    // Generic fallback probes
     const editorSelectors = [
       '.ql-editor[contenteditable="true"]',
       '[contenteditable="true"]',
@@ -172,7 +161,7 @@ export class PostLoginSinglePostViewPage extends BasePage {
     ];
     for (const sel of editorSelectors) {
       const el = this.page.locator(sel).first();
-      if (await el.isVisible({ timeout: 1000 }).catch(() => false)) return el;
+      if (await el.isVisible({ timeout: 500 }).catch(() => false)) return el;
     }
 
     throw new Error(

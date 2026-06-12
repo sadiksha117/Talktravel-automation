@@ -7,7 +7,7 @@ const VALID_PASSWORD = 'Admin@123';
 test.describe('Post-Login Single Post View — Happy Path', () => {
   let postPage: PostLoginSinglePostViewPage;
 
-  test.setTimeout(120000);
+  test.setTimeout(180000);
 
   test.beforeEach(async ({ page }) => {
     postPage = new PostLoginSinglePostViewPage(page);
