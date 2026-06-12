@@ -4,30 +4,26 @@ import { BasePage } from './BasePage';
 export class PostLoginHomepagePage extends BasePage {
   // Header
   readonly logo: Locator;
-  readonly headerCommunity: Locator;
-  readonly headerBlog: Locator;
-  readonly headerFaq: Locator;
-  readonly headerNewPostBtn: Locator;
-  readonly headerNotifications: Locator;
-  readonly headerUserAvatar: Locator;
+  readonly headerSearch: Locator;
+  readonly createPostBtn: Locator;
+  readonly messagesIcon: Locator;
+  readonly notificationsBell: Locator;
+  readonly headerAvatar: Locator;
+
+  // Left nav
+  readonly leftNav: Locator;
 
   // Feed tabs
   readonly feedTabTrending: Locator;
   readonly feedTabLatest: Locator;
   readonly feedTabForYou: Locator;
 
-  // View switch
-  readonly viewSwitchMenuBtn: Locator;
+  // View toggle
   readonly cardViewToggle: Locator;
   readonly compactViewToggle: Locator;
 
   // Feed
   readonly feedPostCards: Locator;
-
-  // Post actions (authenticated)
-  readonly upvoteButtons: Locator;
-  readonly downvoteButtons: Locator;
-  readonly newPostBtn: Locator;
 
   // Sidebar
   readonly popularThisWeek: Locator;
@@ -43,43 +39,37 @@ export class PostLoginHomepagePage extends BasePage {
     super(page);
 
     // Header
-    this.logo = page.getByRole('link', { name: 'TalkTravel talk travel' });
-    this.headerCommunity = page.getByRole('link', { name: 'Community', exact: true });
-    this.headerBlog = page.getByRole('link', { name: 'Blog', exact: true });
-    this.headerFaq = page.getByRole('navigation').getByRole('link', { name: 'FAQ' });
-    this.headerNewPostBtn = page.getByRole('link', { name: /new post/i }).or(
-      page.getByRole('button', { name: /new post/i })
+    this.logo = page.locator('header >> a[href="/"]');
+    this.headerSearch = page.locator('header >> input[type="search"]').or(
+      page.locator('[data-testid="header-search"]')
     ).first();
-    this.headerNotifications = page.getByRole('button', { name: /notification/i }).or(
-      page.locator('[data-testid="notifications"]')
+    this.createPostBtn = page.locator('[data-testid="create-post"]');
+    this.messagesIcon = page.locator('[data-testid="messages-icon"]').or(
+      page.locator('a[href="/chats"]')
     ).first();
-    this.headerUserAvatar = page.locator('[data-testid="user-avatar"]').or(
-      page.locator('header img[alt*="avatar"], header img[alt*="profile"]')
+    this.notificationsBell = page.locator('[data-testid="notifications-bell"]');
+    this.headerAvatar = page.locator('[data-testid="header-avatar"]');
+
+    // Left nav
+    this.leftNav = page.locator('nav[aria-label="Primary"]').or(
+      page.locator('[data-testid="left-nav"]')
     ).first();
 
     // Feed tabs
-    this.feedTabTrending = page.getByRole('link', { name: 'Trending', exact: true });
-    this.feedTabLatest = page.getByRole('link', { name: 'Latest', exact: true });
-    this.feedTabForYou = page.getByRole('link', { name: 'For You', exact: true });
+    this.feedTabTrending = page.locator('[role="tab"]:has-text("Trending")');
+    this.feedTabLatest = page.locator('[role="tab"]:has-text("Latest")');
+    this.feedTabForYou = page.locator('[role="tab"]:has-text("For You")');
 
-    // View switch
-    this.viewSwitchMenuBtn = page.getByRole('button', { name: 'TalkTravel' });
-    this.cardViewToggle = page.getByText('Card', { exact: true });
-    this.compactViewToggle = page.getByText('Compact', { exact: true });
+    // View toggle
+    this.cardViewToggle = page.locator('button[aria-label="Card view"]');
+    this.compactViewToggle = page.locator('button[aria-label="Compact view"]');
 
-    // Feed cards
-    this.feedPostCards = page.locator('a[href^="/post/"]:has(div)');
-
-    // Post actions
-    this.upvoteButtons = page.locator('[data-testid="upvote"], button[aria-label="Upvote"]');
-    this.downvoteButtons = page.locator('[data-testid="downvote"], button[aria-label="Downvote"]');
-    this.newPostBtn = page.getByRole('link', { name: /new post/i }).or(
-      page.getByRole('button', { name: /new post/i })
-    ).first();
+    // Feed
+    this.feedPostCards = page.locator('[data-testid="post-card"]');
 
     // Sidebar
-    this.popularThisWeek = page.getByText('Popular This Week');
-    this.popularThisWeekLinks = page.locator('a[href^="/post/"]:not(:has(div))');
+    this.popularThisWeek = page.locator('aside:has-text("Popular This Week")');
+    this.popularThisWeekLinks = page.locator('aside:has-text("Popular This Week") >> a');
 
     // Footer
     this.footer = page.locator('footer');
@@ -95,10 +85,7 @@ export class PostLoginHomepagePage extends BasePage {
       .getByRole('textbox', { name: /email|username|phone/i })
       .or(this.page.locator('input[type="email"]'))
       .first();
-    const passwordField = this.page
-      .locator('input[type="password"]')
-      .or(this.page.getByRole('textbox', { name: /password/i }))
-      .first();
+    const passwordField = this.page.locator('input[type="password"]').first();
     const submitBtn = this.page
       .locator('button[type="submit"]')
       .or(this.page.getByRole('button', { name: /log in|sign in/i }))
@@ -106,12 +93,12 @@ export class PostLoginHomepagePage extends BasePage {
     await loginField.fill(email);
     await passwordField.fill(password);
     await submitBtn.click();
-    await this.page.waitForURL(/\/(trending|community|dashboard|feed|home)/);
+    await this.page.waitForURL(/\/(trending|community|dashboard|feed|home)?$/);
     await this.waitForPageLoad();
   }
 
   async goToHomepage(): Promise<void> {
-    await this.page.goto('/trending');
+    await this.page.goto('/');
     await this.waitForPageLoad();
   }
 
@@ -121,56 +108,5 @@ export class PostLoginHomepagePage extends BasePage {
     } catch {
       // Banner not present
     }
-  }
-
-  async switchToLatestTab(): Promise<void> {
-    await this.feedTabLatest.click();
-    await this.waitForPageLoad();
-  }
-
-  async switchToTrendingTab(): Promise<void> {
-    await this.feedTabTrending.click();
-    await this.waitForPageLoad();
-  }
-
-  async switchToForYouTab(): Promise<void> {
-    await this.feedTabForYou.click();
-    await this.waitForPageLoad();
-  }
-
-  async switchToCompactView(): Promise<void> {
-    await this.viewSwitchMenuBtn.click();
-    await this.compactViewToggle.waitFor({ state: 'visible' });
-    await this.compactViewToggle.click();
-    await this.waitForPageLoad();
-  }
-
-  async switchToCardView(): Promise<void> {
-    await this.viewSwitchMenuBtn.click();
-    await this.cardViewToggle.waitFor({ state: 'visible' });
-    await this.cardViewToggle.click();
-    await this.waitForPageLoad();
-  }
-
-  async clickFirstPostCard(): Promise<void> {
-    const firstCard = this.feedPostCards.first();
-    await firstCard.waitFor({ state: 'visible' });
-    await firstCard.click();
-    await this.page.waitForURL('**/post/**');
-    await this.waitForPageLoad();
-  }
-
-  async clickFirstPopularThisWeekPost(): Promise<void> {
-    const firstLink = this.popularThisWeekLinks.first();
-    await firstLink.waitFor({ state: 'visible' });
-    await firstLink.click();
-    await this.page.waitForURL('**/post/**');
-    await this.waitForPageLoad();
-  }
-
-  async clickLogo(): Promise<void> {
-    await this.logo.click();
-    await this.page.waitForURL(/\/(trending)?$/);
-    await this.waitForPageLoad();
   }
 }
