@@ -63,8 +63,7 @@ export class PostLoginHomepagePage extends BasePage {
 
     // Sidebar
     this.popularThisWeek = page.getByRole('heading', { name: 'Popular This Week', level: 4 });
-    this.popularThisWeekLinks = page.getByRole('heading', { name: 'Popular This Week', level: 4 })
-      .locator('xpath=../..').locator('a[href^="/post/"]');
+    this.popularThisWeekLinks = page.locator('div:has(h4:has-text("Popular This Week")) a[href^="/post/"]');
 
     // Footer
     this.footer = page.locator('footer');
@@ -93,7 +92,7 @@ export class PostLoginHomepagePage extends BasePage {
   }
 
   async goToHomepage(): Promise<void> {
-    await this.page.goto('https://staging.talktravel.com/trending');
+    await this.page.goto('https://staging.talktravel.com/trending', { waitUntil: 'domcontentloaded' });
     await this.waitForPageLoad();
     await this.dismissCookieBanner();
   }
