@@ -42,7 +42,7 @@ export class PostLoginHomepagePage extends BasePage {
     this.logo = page.getByRole('link', { name: 'TalkTravel talk travel' });
     this.headerCommunity = page.getByRole('link', { name: 'Community', exact: true });
     this.headerBlog = page.getByRole('link', { name: 'Blog', exact: true });
-    this.headerFaq = page.getByRole('navigation').getByRole('link', { name: 'FAQ' });
+    this.headerFaq = page.getByRole('link', { name: 'FAQ', exact: true }).first();
 
     // Feed tabs
     this.feedTabTrending = page.getByRole('link', { name: 'Trending', exact: true });
@@ -63,7 +63,8 @@ export class PostLoginHomepagePage extends BasePage {
 
     // Sidebar
     this.popularThisWeek = page.getByRole('heading', { name: 'Popular This Week', level: 4 });
-    this.popularThisWeekLinks = page.locator('a[href^="/post/"]:not(:has(div))');
+    this.popularThisWeekLinks = page.getByRole('heading', { name: 'Popular This Week', level: 4 })
+      .locator('xpath=../..').locator('a[href^="/post/"]');
 
     // Footer
     this.footer = page.locator('footer');
