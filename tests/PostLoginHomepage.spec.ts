@@ -51,7 +51,7 @@ test.describe('Post-Login Homepage', () => {
     await expect(homePage.feedPostCards.first()).toBeVisible();
   });
 
-  test('Step 1 — Popular This Week sidebar is visible', async () => {
+  test('Step 1 — Popular This Week sidebar heading is visible', async () => {
     await expect(homePage.popularThisWeek).toBeVisible();
   });
 
@@ -113,19 +113,25 @@ test.describe('Post-Login Homepage', () => {
     await expect(page).toHaveURL(/\/trending$/);
   });
 
-  // ── Step 6 & 7: Upvote / Downvote ────────────────────────────────────────
+  // ── Step 6: Upvote ────────────────────────────────────────────────────────
 
-  test('Step 6 — upvote button is visible on feed cards', async ({ page }) => {
-    const firstPost = homePage.feedPostCards.first();
-    await firstPost.waitFor({ state: 'visible' });
-    const upvote = page.locator('a[href^="/post/"]:has(div)').first().locator('button').first();
-    await expect(upvote).toBeVisible();
+  test('Step 6 — upvote button is visible on feed', async () => {
+    await expect(homePage.firstUpvoteBtn).toBeVisible();
   });
 
   test('Step 6 — clicking upvote does not redirect to /login', async ({ page }) => {
-    const firstPost = homePage.feedPostCards.first();
-    await firstPost.waitFor({ state: 'visible' });
-    await page.locator('a[href^="/post/"]:has(div)').first().locator('button').first().click();
+    await homePage.firstUpvoteBtn.click();
+    await expect(page).not.toHaveURL(/\/login/);
+  });
+
+  // ── Step 7: Downvote ──────────────────────────────────────────────────────
+
+  test('Step 7 — downvote button is visible on feed', async () => {
+    await expect(homePage.firstDownvoteBtn).toBeVisible();
+  });
+
+  test('Step 7 — clicking downvote does not redirect to /login', async ({ page }) => {
+    await homePage.firstDownvoteBtn.click();
     await expect(page).not.toHaveURL(/\/login/);
   });
 
@@ -158,7 +164,7 @@ test.describe('Post-Login Homepage', () => {
 
   test('Step 11 — clicking author link navigates to user profile', async ({ page }) => {
     await homePage.clickFirstAuthorLink();
-    await expect(page).toHaveURL(/\/(user|users|profile)\/.+/);
+    await expect(page).toHaveURL(/\/profile\/.+/);
   });
 
   // ── Step 15: Popular This Week sidebar ───────────────────────────────────
@@ -197,9 +203,13 @@ test.describe('Post-Login Homepage', () => {
     await expect(page).toHaveURL(/\/(trending)?$/);
   });
 
-  test('happy path — upvote stays on homepage', async ({ page }) => {
+  test('happy path — upvote and downvote stay on homepage', async ({ page }) => {
     await expect(page).toHaveURL(/\/trending$/);
-    await page.locator('a[href^="/post/"]:has(div)').first().locator('button').first().click();
+
+    await homePage.firstUpvoteBtn.click();
+    await expect(page).not.toHaveURL(/\/login/);
+
+    await homePage.firstDownvoteBtn.click();
     await expect(page).not.toHaveURL(/\/login/);
   });
 });

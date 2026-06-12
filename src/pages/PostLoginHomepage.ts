@@ -21,6 +21,10 @@ export class PostLoginHomepagePage extends BasePage {
   // Feed
   readonly feedPostCards: Locator;
 
+  // Vote buttons
+  readonly firstUpvoteBtn: Locator;
+  readonly firstDownvoteBtn: Locator;
+
   // Sidebar
   readonly popularThisWeek: Locator;
   readonly popularThisWeekLinks: Locator;
@@ -43,7 +47,7 @@ export class PostLoginHomepagePage extends BasePage {
     // Feed tabs
     this.feedTabTrending = page.getByRole('link', { name: 'Trending', exact: true });
     this.feedTabLatest = page.getByRole('link', { name: 'Latest', exact: true });
-    this.feedTabForYou = page.getByRole('link', { name: 'For You', exact: true });
+    this.feedTabForYou = page.locator('a[href="/for-you"]');
 
     // View switch — same pattern as pre-login
     this.viewSwitchMenuBtn = page.getByRole('button', { name: 'TalkTravel' });
@@ -53,8 +57,12 @@ export class PostLoginHomepagePage extends BasePage {
     // Feed cards
     this.feedPostCards = page.locator('a[href^="/post/"]:has(div)');
 
+    // Vote buttons
+    this.firstUpvoteBtn = page.getByRole('button', { name: 'Upvote' }).first();
+    this.firstDownvoteBtn = page.getByRole('button', { name: 'Downvote' }).first();
+
     // Sidebar
-    this.popularThisWeek = page.getByText('Popular This Week');
+    this.popularThisWeek = page.getByRole('heading', { name: 'Popular This Week', level: 4 });
     this.popularThisWeekLinks = page.locator('a[href^="/post/"]:not(:has(div))');
 
     // Footer
@@ -143,10 +151,10 @@ export class PostLoginHomepagePage extends BasePage {
   }
 
   async clickFirstAuthorLink(): Promise<void> {
-    const authorLink = this.page.locator('a[href*="/user/"], a[href*="/profile/"]').first();
+    const authorLink = this.page.locator('a[href^="/profile/"]').first();
     await authorLink.waitFor({ state: 'visible' });
     await authorLink.click();
-    await this.page.waitForURL(/\/(user|users|profile)\//);
+    await this.page.waitForURL(/\/profile\/.+/);
     await this.waitForPageLoad();
   }
 
