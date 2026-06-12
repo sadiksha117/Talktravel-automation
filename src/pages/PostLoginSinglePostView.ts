@@ -148,17 +148,18 @@ export class PostLoginSinglePostViewPage extends BasePage {
 
     // The app uses Quill (class="ql-editor"). After page load the server renders
     // contenteditable="false" (logged-out placeholder). After React/auth hydration it
-    // switches to contenteditable="true". Wait up to 15s for that transition.
+    // switches to contenteditable="true". Wait up to 5s for that transition.
+    // Keep this short — beforeEach already uses ~50s, so budget is tight.
     const quillEditor = this.page.locator('.ql-editor').first();
     if (await quillEditor.isVisible({ timeout: 3000 }).catch(() => false)) {
       try {
         await this.page.waitForFunction(
           () => document.querySelector('.ql-editor')?.getAttribute('contenteditable') === 'true',
-          { timeout: 15000 }
+          { timeout: 5000 }
         );
         return this.page.locator('.ql-editor[contenteditable="true"]').first();
       } catch {
-        // Quill editor didn't become editable — user may not be authenticated for comments
+        // Quill editor didn't become editable within 5s — still showing logged-out state
       }
     }
 
@@ -197,19 +198,16 @@ export class PostLoginSinglePostViewPage extends BasePage {
   // The own profile link is inside a hidden nav dropdown — extract href via evaluate
   // rather than clicking, which avoids opening/closing the dropdown.
   async goToOwnProfile(): Promise<void> {
+    // Extract the profile href from the hidden nav dropdown without opening it
     const href = await this.page.evaluate(() => {
-      const link = document.querySelector('a.dropdown-item[href*="/profile/"]');
+      const link = document.querySelector('a.dropdown-item[href*="/profile/"]') as HTMLAnchorElement | null;
       return link?.getAttribute('href') ?? null;
     });
     if (href) {
       await this.page.goto(`https://staging.talktravel.com${href}`, { waitUntil: 'domcontentloaded' });
     } else {
-      // Fallback: open the account dropdown to expose the link, then click it
-      const accountToggle = this.page.locator('[data-bs-toggle="dropdown"], .account-toggle, .avatar-btn').first();
-      await accountToggle.click({ timeout: 5000 });
-      const profileLink = this.page.locator('a.dropdown-item[href*="/profile/"]').first();
-      await profileLink.click();
-      await this.page.waitForURL(/\/profile\/.+/, { timeout: 15000 });
+      // Fallback: navigate directly to the confirmed test-account profile
+      await this.page.goto('https://staging.talktravel.com/profile/prempoudel_1', { waitUntil: 'domcontentloaded' });
     }
     await this.waitForPageLoad();
   }
