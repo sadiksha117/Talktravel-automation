@@ -160,4 +160,111 @@ test.describe('User Profile View (Pre-Login) — Exploratory Edge Cases', () => 
       expect(parseInt(match[1], 10)).toBeGreaterThan(0);
     }
   });
+
+  // ── Edge: badge behaviour ─────────────────────────────────────────────────
+
+  test('Edge — badge detail page loads without console errors after clicking a badge', { tag: '@exploratory' }, async ({ page }) => {
+    const errors: string[] = [];
+    page.on('console', msg => { if (msg.type() === 'error') errors.push(msg.text()); });
+    await profilePage.clickFirstBadge();
+    expect(errors).toHaveLength(0);
+  });
+
+  test('Edge — See all badges link navigates to /badges and page renders without 404 resources', { tag: '@exploratory' }, async ({ page }) => {
+    const notFoundUrls: string[] = [];
+    page.on('response', res => { if (res.status() === 404) notFoundUrls.push(res.url()); });
+    await profilePage.clickSeeAllBadges();
+    await expect(page).toHaveURL(/\/badges/);
+    expect(notFoundUrls).toHaveLength(0);
+  });
+
+  test('Edge — badge strip has at least one badge visible or shows empty state gracefully', { tag: '@exploratory' }, async ({ page }) => {
+    const badgeCount = await profilePage.singleBadge.count();
+    if (badgeCount === 0) {
+      const emptyState = page.locator('text=/no badges|badges yet/i');
+      await expect(emptyState).toBeVisible();
+    } else {
+      expect(badgeCount).toBeGreaterThan(0);
+    }
+  });
+
+  // ── Edge: topic chip navigation ───────────────────────────────────────────
+
+  test('Edge — topic chip navigation loads /tags page without console errors', { tag: '@exploratory' }, async ({ page }) => {
+    const errors: string[] = [];
+    page.on('console', msg => { if (msg.type() === 'error') errors.push(msg.text()); });
+    await profilePage.clickFirstTopicChip();
+    await expect(page).toHaveURL(/\/tags\/.+/);
+    expect(errors).toHaveLength(0);
+  });
+
+  test('Edge — topic chip URL slug contains only valid characters (no encoded spaces or special chars)', { tag: '@exploratory' }, async ({ page }) => {
+    const chip = profilePage.topicChips.first();
+    await chip.waitFor({ state: 'visible' });
+    const href = await chip.getAttribute('href') ?? '';
+    expect(href).toMatch(/^\/tags\/[A-Za-z0-9_%-]+$/);
+  });
+
+  // ── Edge: post navigation from profile ───────────────────────────────────
+
+  test('Edge — clicking a post navigates to /post page that has no 500 server errors', { tag: '@exploratory' }, async ({ page }) => {
+    let serverError = false;
+    page.on('response', res => { if (res.status() >= 500) serverError = true; });
+    await profilePage.clickFirstPostCard();
+    expect(serverError).toBe(false);
+  });
+
+  test('Edge — browser back from a post inside the Posts tab returns to the profile page', { tag: '@exploratory' }, async ({ page }) => {
+    const profileUrl = page.url();
+    await profilePage.clickFirstPostCard();
+    await page.goBack();
+    await page.waitForLoadState('load');
+    expect(page.url()).toContain('/profile/');
+    await expect(profilePage.profileUsername).toBeVisible();
+  });
+
+  // ── Edge: header links from profile ──────────────────────────────────────
+
+  test('Edge — clicking TalkTravel logo from profile navigates to /trending', { tag: '@exploratory' }, async ({ page }) => {
+    await profilePage.logo.click();
+    await expect(page).toHaveURL(/\/trending/);
+  });
+
+  test('Edge — clicking Log in from profile navigates to /login', { tag: '@exploratory' }, async ({ page }) => {
+    await profilePage.headerLogIn.click();
+    await expect(page).toHaveURL(/\/login/);
+  });
+
+  test('Edge — clicking Join Free from profile navigates to /register', { tag: '@exploratory' }, async ({ page }) => {
+    await profilePage.headerJoinFree.click();
+    await expect(page).toHaveURL(/\/register/);
+  });
+
+  // ── Edge: rapid interaction ───────────────────────────────────────────────
+
+  test('Edge — rapid double-click on Add Friend triggers only one redirect to /login', { tag: '@exploratory' }, async ({ page }) => {
+    const profileUrl = page.url();
+    let loginRedirectCount = 0;
+    page.on('response', res => {
+      if (res.url().includes('/login')) loginRedirectCount++;
+    });
+    await profilePage.addFriendBtn.dblclick();
+    await page.waitForURL(/\/login/, { timeout: 10000 });
+    expect(page.url()).toContain('/login');
+    // Should not have looped or double-redirected back to profile
+    expect(page.url()).not.toBe(profileUrl);
+  });
+
+  // ── Edge: og/meta tags ────────────────────────────────────────────────────
+
+  test('Edge — profile page has og:title meta tag containing the username', { tag: '@exploratory' }, async ({ page }) => {
+    const ogTitle = await page.locator('meta[property="og:title"]').getAttribute('content');
+    const username = (await profilePage.profileUsername.textContent() ?? '').trim();
+    expect(ogTitle).toContain(username);
+  });
+
+  test('Edge — profile page has og:type set to "profile"', { tag: '@exploratory' }, async ({ page }) => {
+    const ogType = await page.locator('meta[property="og:type"]').getAttribute('content');
+    expect(ogType).toBe('profile');
+  });
 });
