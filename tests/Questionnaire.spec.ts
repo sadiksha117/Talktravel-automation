@@ -2,10 +2,6 @@ import { test, expect } from '@playwright/test';
 import { CreateAccountPage } from '../src/pages/CreateAccount';
 import { QuestionnairePage } from '../src/pages/Questionnaire';
 
-// Serial mode: each test needs a fresh account; running in parallel causes
-// registration race conditions and depletes unique emails faster than needed.
-test.describe.configure({ mode: 'serial' });
-
 test.describe('Travel Profile / Questionnaire (Onboarding) — Positive Cases', () => {
   let createAccount: CreateAccountPage;
   let questionnaire: QuestionnairePage;
@@ -23,19 +19,16 @@ test.describe('Travel Profile / Questionnaire (Onboarding) — Positive Cases', 
     );
     await createAccount.submitForm();
 
-    // Wait up to 20s for navigation away from /register
-    try {
-      await page.waitForURL(url => !url.pathname.includes('/register'), { timeout: 20000 });
-    } catch {
-      // If submit didn't navigate, the form may still be processing — wait a moment
-      await page.waitForTimeout(2000);
-    }
+    // Wait for registration to leave /register (mirrors CreateAccount test approach)
+    await expect(page).not.toHaveURL(/\/register/, { timeout: 20000 });
 
-    // Navigate directly to /questionnaire if not already there
+    // Navigate directly to /questionnaire if the app routed elsewhere
     if (!page.url().includes('/questionnaire')) {
       await page.goto('https://staging.talktravel.com/questionnaire');
       await page.waitForLoadState('networkidle');
     }
+
+    await expect(page).toHaveURL(/\/questionnaire/, { timeout: 10000 });
   });
 
   // ── Step 2: Page structure ────────────────────────────────────────────────
