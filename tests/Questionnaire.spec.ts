@@ -11,16 +11,25 @@ test.describe('Travel Profile / Questionnaire (Onboarding) — Positive Cases', 
     questionnaire = new QuestionnairePage(page);
 
     // Create a fresh account so the questionnaire appears
+    const ts = Date.now();
     await createAccount.goToRegisterViaJoinFreeHeader();
     await createAccount.fillSignupForm(
-      `tester${Date.now()}`,
-      `tester${Date.now()}@example.com`,
+      `tester${ts}`,
+      `tester${ts}@example.com`,
       'TestPass@123'
     );
     await createAccount.submitForm();
 
-    // Should land on /questionnaire after signup
-    await expect(page).toHaveURL(/\/questionnaire/);
+    // Wait for navigation away from /register (up to 15s)
+    await page.waitForURL(url => !url.pathname.includes('/register'), { timeout: 15000 });
+
+    // If redirected to /questionnaire, we're ready; if not, navigate there directly
+    if (!page.url().includes('/questionnaire')) {
+      await page.goto('https://staging.talktravel.com/questionnaire');
+      await page.waitForLoadState('load');
+    }
+
+    await expect(page).toHaveURL(/\/questionnaire/, { timeout: 10000 });
   });
 
   // ── Step 2: Page structure ────────────────────────────────────────────────

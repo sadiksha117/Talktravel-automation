@@ -18,12 +18,17 @@ export class QuestionnairePage extends BasePage {
       .or(page.locator('text=Please verify your account'));
     this.pageHeading = page.locator('main h1').or(page.locator('text=Your Travel Profile'));
     this.pageSubtext = page.locator('text=Help us personalize your experience');
-    this.homeAirportInput = page.locator('input[placeholder*="Search for an airport"]').or(
-      page.locator('[data-testid="home-airport"]')
-    );
-    this.favoriteAirlineInput = page.locator('input[placeholder*="Thai Airways"]').or(
-      page.locator('[data-testid="favorite-airline"]')
-    );
+    this.homeAirportInput = page
+      .locator('[data-testid="home-airport"]')
+      .or(page.locator('input[placeholder*="airport" i]'))
+      .or(page.locator('input[placeholder*="LAX" i]'))
+      .or(page.locator('input[placeholder*="Search for an airport" i]'));
+    this.favoriteAirlineInput = page
+      .locator('[data-testid="favorite-airline"]')
+      .or(page.locator('input[placeholder*="airline" i]'))
+      .or(page.locator('input[placeholder*="Thai Airways" i]'))
+      .or(page.locator('input[placeholder*="Emirates" i]'))
+      .or(page.locator('input[placeholder*="Delta" i]'));
     this.continueBtn = page.locator('button:has-text("Continue")');
     this.skipLink = page.locator('text=Skip for now');
   }
