@@ -225,9 +225,9 @@ test.describe('User Profile View (Pre-Login) — Exploratory Edge Cases', () => 
 
   // ── Edge: header links from profile ──────────────────────────────────────
 
-  test('Edge — clicking TalkTravel logo from profile navigates to /trending', { tag: '@exploratory' }, async ({ page }) => {
+  test('Edge — clicking TalkTravel logo from profile navigates to homepage', { tag: '@exploratory' }, async ({ page }) => {
     await profilePage.logo.click();
-    await expect(page).toHaveURL(/\/trending/);
+    await expect(page).toHaveURL(/staging\.talktravel\.com\/?$/);
   });
 
   test('Edge — clicking Log in from profile navigates to /login', { tag: '@exploratory' }, async ({ page }) => {
