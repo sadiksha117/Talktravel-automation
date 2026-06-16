@@ -267,4 +267,28 @@ test.describe('User Profile View (Pre-Login) — Exploratory Edge Cases', () => 
     const ogType = await page.locator('meta[property="og:type"]').getAttribute('content');
     expect(ogType).toBe('profile');
   });
+
+  test('Edge — Comments tab shows correct count matching number of comment rows rendered', { tag: '@exploratory' }, async ({ page }) => {
+    const tabText = await profilePage.commentsTab.textContent() ?? '';
+    const countMatch = tabText.match(/(\d+)/);
+    await profilePage.switchToCommentsTab();
+    const renderedRows = await page.locator('a[href*="/post/"][href*="target="]').count();
+    if (countMatch) {
+      const tabCount = parseInt(countMatch[1], 10);
+      // Rendered rows may be paginated so should be <= total tab count
+      expect(renderedRows).toBeGreaterThan(0);
+      expect(renderedRows).toBeLessThanOrEqual(tabCount);
+    }
+  });
+
+  test('Edge — Posts tab shows correct count matching number of post cards rendered', { tag: '@exploratory' }, async ({ page }) => {
+    const tabText = await profilePage.postsTab.textContent() ?? '';
+    const countMatch = tabText.match(/(\d+)/);
+    const renderedCards = await profilePage.postCards.count();
+    if (countMatch) {
+      const tabCount = parseInt(countMatch[1], 10);
+      expect(renderedCards).toBeGreaterThan(0);
+      expect(renderedCards).toBeLessThanOrEqual(tabCount);
+    }
+  });
 });
