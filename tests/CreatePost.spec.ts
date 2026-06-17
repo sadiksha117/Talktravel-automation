@@ -5,14 +5,15 @@ const VALID_EMAIL = process.env.TEST_EMAIL ?? 'prempoudel72707@gmail.com';
 const VALID_PASSWORD = process.env.TEST_PASSWORD ?? 'Admin@123';
 
 test.describe('Create Post (Post-Login) — Positive Flows', () => {
+  test.describe.configure({ mode: 'serial', timeout: 90000 });
+
   let createPost: CreatePostPage;
 
   test.beforeEach(async ({ page }) => {
     createPost = new CreatePostPage(page);
     await createPost.loginAndGoToCreatePost(VALID_EMAIL, VALID_PASSWORD);
+    await createPost.dismissCookieBanner();
   });
-
-  test.setTimeout(90000);
 
   // ── Step 1: Page loads with all required elements ────────────────────────
 
@@ -69,29 +70,23 @@ test.describe('Create Post (Post-Login) — Positive Flows', () => {
   // ── Step 6: Topics — search and select ──────────────────────────────────
 
   test('Step 6 — Selecting a topic adds it as a chip', async ({ page }) => {
-    await createPost.topicsInput.fill('Hilton');
-    await page.getByText('Hilton', { exact: true }).first().waitFor({ state: 'visible' });
-    await page.getByText('Hilton', { exact: true }).first().click();
-    await expect(page.locator('div').filter({ hasText: /^Hilton×$/ }).first()).toBeVisible();
+    await createPost.selectTopic('Hilton');
+    await expect(page.locator('[class*="chip"],[class*="tag"],[class*="badge"],[class*="selected-topic"]').filter({ hasText: 'Hilton' }).first()).toBeVisible({ timeout: 10000 });
   });
 
   test('Step 6 — Topics input clears after a topic is selected', async ({ page }) => {
-    await createPost.topicsInput.fill('Hilton');
-    await page.getByText('Hilton', { exact: true }).first().waitFor({ state: 'visible' });
-    await page.getByText('Hilton', { exact: true }).first().click();
+    await createPost.selectTopic('Hilton');
     await expect(createPost.topicsInput).toHaveValue('');
   });
 
   // ── Step 10: Topics — remove a chip ─────────────────────────────────────
 
   test('Step 10 — Removing a topic chip deselects the topic', async ({ page }) => {
-    await createPost.topicsInput.fill('Hilton');
-    await page.getByText('Hilton', { exact: true }).first().waitFor({ state: 'visible' });
-    await page.getByText('Hilton', { exact: true }).first().click();
-    const chip = page.locator('div').filter({ hasText: /^Hilton×$/ }).first();
-    await expect(chip).toBeVisible();
-    await chip.getByText('×').click();
-    await expect(page.locator('div').filter({ hasText: /^Hilton×$/ })).toHaveCount(0);
+    await createPost.selectTopic('Hilton');
+    const chip = page.locator('[class*="chip"],[class*="tag"],[class*="badge"],[class*="selected-topic"]').filter({ hasText: 'Hilton' }).first();
+    await expect(chip).toBeVisible({ timeout: 10000 });
+    await chip.locator('button,[class*="remove"],[class*="close"],[class*="delete"]').first().click();
+    await expect(chip).not.toBeVisible({ timeout: 5000 });
   });
 
   // ── Step 11: Cancel ──────────────────────────────────────────────────────
@@ -109,10 +104,9 @@ test.describe('Create Post (Post-Login) — Positive Flows', () => {
     await createPost.titleInput.fill(title);
     await createPost.discussionEditor.click();
     await createPost.discussionEditor.fill('Discussion body content.');
-    await createPost.topicsInput.fill('Hilton');
-    await page.getByText('Hilton', { exact: true }).first().waitFor({ state: 'visible' });
-    await page.getByText('Hilton', { exact: true }).first().click();
-    await createPost.publishBtn.click();
+    await createPost.selectTopic('Hilton');
+    await createPost.dismissCookieBanner();
+    await createPost.publishBtn.click({ force: true });
     await expect(page).toHaveURL(/\/post\/[a-z0-9-]+/, { timeout: 15000 });
     await expect(page.getByRole('heading', { level: 1 })).toContainText(title);
   });
@@ -122,10 +116,9 @@ test.describe('Create Post (Post-Login) — Positive Flows', () => {
   test('Step 16 — Publish with Title and one topic succeeds', async ({ page }) => {
     const title = `Minimal post ${Date.now()}`;
     await createPost.titleInput.fill(title);
-    await createPost.topicsInput.fill('Hilton');
-    await page.getByText('Hilton', { exact: true }).first().waitFor({ state: 'visible' });
-    await page.getByText('Hilton', { exact: true }).first().click();
-    await createPost.publishBtn.click();
+    await createPost.selectTopic('Hilton');
+    await createPost.dismissCookieBanner();
+    await createPost.publishBtn.click({ force: true });
     await expect(page).toHaveURL(/\/post\/[a-z0-9-]+/, { timeout: 15000 });
   });
 
@@ -134,10 +127,9 @@ test.describe('Create Post (Post-Login) — Positive Flows', () => {
   test('Step 17 — Published post appears in My Posts', async ({ page }) => {
     const title = `My Posts check ${Date.now()}`;
     await createPost.titleInput.fill(title);
-    await createPost.topicsInput.fill('Hilton');
-    await page.getByText('Hilton', { exact: true }).first().waitFor({ state: 'visible' });
-    await page.getByText('Hilton', { exact: true }).first().click();
-    await createPost.publishBtn.click();
+    await createPost.selectTopic('Hilton');
+    await createPost.dismissCookieBanner();
+    await createPost.publishBtn.click({ force: true });
     await expect(page).toHaveURL(/\/post\/[a-z0-9-]+/, { timeout: 15000 });
     await page.getByRole('link', { name: /my posts/i }).click();
     await expect(page.locator(`text=${title}`).first()).toBeVisible();

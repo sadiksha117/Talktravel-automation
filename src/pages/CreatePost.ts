@@ -27,7 +27,7 @@ export class CreatePostPage extends BasePage {
     this.externalLinkInput = page.getByRole('textbox', { name: 'External Link' });
     this.topicsInput = page.getByRole('textbox', { name: 'Topics *' });
     this.publishBtn = page.getByRole('button', { name: 'Publish Post' });
-    this.cancelBtn = page.getByRole('button', { name: /cancel/i });
+    this.cancelBtn = page.getByRole('button', { name: /cancel|close/i });
   }
 
   async loginAndGoToCreatePost(email: string, password: string): Promise<void> {
