@@ -47,11 +47,9 @@ export class CreatePostPage extends BasePage {
   }
 
   async goToCreatePost(): Promise<void> {
-    await this.page.goto('https://staging.talktravel.com/trending', { waitUntil: 'domcontentloaded' });
+    await this.page.goto('https://staging.talktravel.com/create-post', { waitUntil: 'domcontentloaded' });
     await this.waitForPageLoad();
     await this.dismissCookieBanner();
-    await this.createPostBtn.click();
-    await this.waitForPageLoad();
   }
 
   async selectTopic(topicName: string): Promise<void> {
