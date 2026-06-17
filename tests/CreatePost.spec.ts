@@ -42,7 +42,8 @@ test.describe('Create Post (Post-Login) — Positive Flows', () => {
   });
 
   test('Step 1 — Cancel button is visible', async ({ page }) => {
-    await expect(createPost.cancelBtn.or(page.getByRole('button', { name: /close|cancel/i })).first()).toBeVisible();
+    const closeBtn = page.locator('button[aria-label*="close" i], button[aria-label*="cancel" i], .modal .btn-close, .modal-header button, button:has(svg)').first();
+    await expect(createPost.cancelBtn.or(closeBtn).first()).toBeVisible();
   });
 
   // ── Step 3: Title field ──────────────────────────────────────────────────

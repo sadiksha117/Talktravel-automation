@@ -27,7 +27,7 @@ export class CreatePostPage extends BasePage {
     this.externalLinkInput = page.getByRole('textbox', { name: 'External Link' });
     this.topicsInput = page.getByRole('textbox', { name: 'Topics *' });
     this.publishBtn = page.getByRole('button', { name: 'Publish Post' });
-    this.cancelBtn = page.getByRole('button', { name: /cancel|close/i });
+    this.cancelBtn = page.getByRole('button', { name: /cancel|close/i }).or(page.locator('button[aria-label*="close" i], button[aria-label*="cancel" i], .modal .btn-close, .modal-header button')).first();
   }
 
   async loginAndGoToCreatePost(email: string, password: string): Promise<void> {
