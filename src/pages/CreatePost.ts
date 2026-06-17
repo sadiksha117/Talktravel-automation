@@ -37,7 +37,8 @@ export class CreatePostPage extends BasePage {
     await this.emailInput.fill(email);
     await this.passwordInput.fill(password);
     await this.logInBtn.click();
-    await this.page.waitForLoadState('networkidle');
+    await this.page.waitForURL(/staging\.talktravel\.com\/.+/);
+    await this.waitForPageLoad();
     await this.createPostBtn.waitFor({ state: 'visible' });
     await this.createPostBtn.click();
     await this.waitForPageLoad();
