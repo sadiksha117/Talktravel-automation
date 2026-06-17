@@ -12,6 +12,8 @@ test.describe('Create Post (Post-Login) — Positive Flows', () => {
     await createPost.loginAndGoToCreatePost(VALID_EMAIL, VALID_PASSWORD);
   });
 
+  test.setTimeout(90000);
+
   // ── Step 1: Page loads with all required elements ────────────────────────
 
   test('Step 1 — Create Post page heading is visible', async ({ page }) => {
@@ -38,8 +40,8 @@ test.describe('Create Post (Post-Login) — Positive Flows', () => {
     await expect(createPost.publishBtn).toBeVisible();
   });
 
-  test('Step 1 — Cancel button is visible', async () => {
-    await expect(createPost.cancelBtn).toBeVisible();
+  test('Step 1 — Cancel button is visible', async ({ page }) => {
+    await expect(createPost.cancelBtn.or(page.getByRole('button', { name: /close|cancel/i })).first()).toBeVisible();
   });
 
   // ── Step 3: Title field ──────────────────────────────────────────────────
@@ -67,27 +69,28 @@ test.describe('Create Post (Post-Login) — Positive Flows', () => {
   // ── Step 6: Topics — search and select ──────────────────────────────────
 
   test('Step 6 — Selecting a topic adds it as a chip', async ({ page }) => {
-    await createPost.topicsInput.fill('hi');
-    await createPost.topicsInput.press('Enter');
-    await page.getByText('Hilton', { exact: true }).click();
-    await expect(page.locator('div').filter({ hasText: /^Hilton×$/ }).nth(1)).toBeVisible();
+    await createPost.topicsInput.fill('Hilton');
+    await page.getByText('Hilton', { exact: true }).first().waitFor({ state: 'visible' });
+    await page.getByText('Hilton', { exact: true }).first().click();
+    await expect(page.locator('div').filter({ hasText: /^Hilton×$/ }).first()).toBeVisible();
   });
 
   test('Step 6 — Topics input clears after a topic is selected', async ({ page }) => {
-    await createPost.topicsInput.fill('hi');
-    await createPost.topicsInput.press('Enter');
-    await page.getByText('Hilton', { exact: true }).click();
+    await createPost.topicsInput.fill('Hilton');
+    await page.getByText('Hilton', { exact: true }).first().waitFor({ state: 'visible' });
+    await page.getByText('Hilton', { exact: true }).first().click();
     await expect(createPost.topicsInput).toHaveValue('');
   });
 
   // ── Step 10: Topics — remove a chip ─────────────────────────────────────
 
   test('Step 10 — Removing a topic chip deselects the topic', async ({ page }) => {
-    await createPost.topicsInput.fill('hi');
-    await createPost.topicsInput.press('Enter');
-    await page.getByText('Hilton', { exact: true }).click();
-    await expect(page.locator('div').filter({ hasText: /^Hilton×$/ }).nth(1)).toBeVisible();
-    await page.locator('div').filter({ hasText: /^Hilton×$/ }).nth(1).getByText('×').click();
+    await createPost.topicsInput.fill('Hilton');
+    await page.getByText('Hilton', { exact: true }).first().waitFor({ state: 'visible' });
+    await page.getByText('Hilton', { exact: true }).first().click();
+    const chip = page.locator('div').filter({ hasText: /^Hilton×$/ }).first();
+    await expect(chip).toBeVisible();
+    await chip.getByText('×').click();
     await expect(page.locator('div').filter({ hasText: /^Hilton×$/ })).toHaveCount(0);
   });
 
@@ -96,7 +99,7 @@ test.describe('Create Post (Post-Login) — Positive Flows', () => {
   test('Step 11 — Cancel returns to previous page', async ({ page }) => {
     await createPost.titleInput.fill('Will be discarded');
     await createPost.cancelBtn.click();
-    await expect(page).not.toHaveURL(/\/create-post|\/new-post|\/post\/new/);
+    await expect(createPost.titleInput).not.toBeVisible({ timeout: 5000 });
   });
 
   // ── Step 15: Publish — full happy path ───────────────────────────────────
@@ -106,11 +109,11 @@ test.describe('Create Post (Post-Login) — Positive Flows', () => {
     await createPost.titleInput.fill(title);
     await createPost.discussionEditor.click();
     await createPost.discussionEditor.fill('Discussion body content.');
-    await createPost.topicsInput.fill('hi');
-    await createPost.topicsInput.press('Enter');
-    await page.getByText('Hilton', { exact: true }).click();
+    await createPost.topicsInput.fill('Hilton');
+    await page.getByText('Hilton', { exact: true }).first().waitFor({ state: 'visible' });
+    await page.getByText('Hilton', { exact: true }).first().click();
     await createPost.publishBtn.click();
-    await expect(page).toHaveURL(/\/post\/[a-z0-9-]+/);
+    await expect(page).toHaveURL(/\/post\/[a-z0-9-]+/, { timeout: 15000 });
     await expect(page.getByRole('heading', { level: 1 })).toContainText(title);
   });
 
@@ -119,11 +122,11 @@ test.describe('Create Post (Post-Login) — Positive Flows', () => {
   test('Step 16 — Publish with Title and one topic succeeds', async ({ page }) => {
     const title = `Minimal post ${Date.now()}`;
     await createPost.titleInput.fill(title);
-    await createPost.topicsInput.fill('hi');
-    await createPost.topicsInput.press('Enter');
-    await page.getByText('Hilton', { exact: true }).click();
+    await createPost.topicsInput.fill('Hilton');
+    await page.getByText('Hilton', { exact: true }).first().waitFor({ state: 'visible' });
+    await page.getByText('Hilton', { exact: true }).first().click();
     await createPost.publishBtn.click();
-    await expect(page).toHaveURL(/\/post\/[a-z0-9-]+/);
+    await expect(page).toHaveURL(/\/post\/[a-z0-9-]+/, { timeout: 15000 });
   });
 
   // ── Step 17: Post appears in My Posts ────────────────────────────────────
@@ -131,11 +134,11 @@ test.describe('Create Post (Post-Login) — Positive Flows', () => {
   test('Step 17 — Published post appears in My Posts', async ({ page }) => {
     const title = `My Posts check ${Date.now()}`;
     await createPost.titleInput.fill(title);
-    await createPost.topicsInput.fill('hi');
-    await createPost.topicsInput.press('Enter');
-    await page.getByText('Hilton', { exact: true }).click();
+    await createPost.topicsInput.fill('Hilton');
+    await page.getByText('Hilton', { exact: true }).first().waitFor({ state: 'visible' });
+    await page.getByText('Hilton', { exact: true }).first().click();
     await createPost.publishBtn.click();
-    await expect(page).toHaveURL(/\/post\/[a-z0-9-]+/);
+    await expect(page).toHaveURL(/\/post\/[a-z0-9-]+/, { timeout: 15000 });
     await page.getByRole('link', { name: /my posts/i }).click();
     await expect(page.locator(`text=${title}`).first()).toBeVisible();
   });

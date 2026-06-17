@@ -27,21 +27,21 @@ export class CreatePostPage extends BasePage {
     this.externalLinkInput = page.getByRole('textbox', { name: 'External Link' });
     this.topicsInput = page.getByRole('textbox', { name: 'Topics *' });
     this.publishBtn = page.getByRole('button', { name: 'Publish Post' });
-    this.cancelBtn = page.getByRole('button', { name: 'Cancel' });
+    this.cancelBtn = page.getByRole('button', { name: /cancel/i });
   }
 
   async loginAndGoToCreatePost(email: string, password: string): Promise<void> {
     await this.page.goto('https://staging.talktravel.com/', { waitUntil: 'domcontentloaded' });
-    await this.waitForPageLoad();
     await this.logInLink.click();
     await this.emailInput.fill(email);
     await this.passwordInput.fill(password);
     await this.logInBtn.click();
     await this.page.waitForURL(/staging\.talktravel\.com\/.+/);
-    await this.waitForPageLoad();
-    await this.createPostBtn.waitFor({ state: 'visible' });
+    // Wait for Create Post link to appear — avoids waitForLoadState hang on SPA
+    await this.createPostBtn.waitFor({ state: 'visible', timeout: 60000 });
     await this.createPostBtn.click();
-    await this.waitForPageLoad();
+    // Create Post opens a modal — wait for the form title rather than a page load
+    await this.titleInput.waitFor({ state: 'visible', timeout: 15000 });
   }
 
   async dismissCookieBanner(): Promise<void> {
@@ -54,8 +54,9 @@ export class CreatePostPage extends BasePage {
 
   async selectTopic(topicName: string): Promise<void> {
     await this.topicsInput.fill(topicName);
-    await this.topicsInput.press('Enter');
-    await this.page.getByText(topicName, { exact: true }).click();
+    // Wait for dropdown to appear then click the matching option
+    await this.page.locator('[class*="option"]', { hasText: topicName }).first().waitFor({ state: 'visible' });
+    await this.page.locator('[class*="option"]', { hasText: topicName }).first().click();
   }
 
   async removeSelectedTopic(topicName: string): Promise<void> {
