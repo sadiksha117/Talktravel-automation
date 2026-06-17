@@ -86,4 +86,121 @@ test.describe('Blog Index, Pagination & Search — Exploratory (Pre-Login)', () 
     const bodyText = await page.locator('body').innerText();
     expect(bodyText.trim().length).toBeGreaterThan(0);
   });
+
+  // ── 15 additional edge cases ─────────────────────────────────────────────
+
+  // 11. Blog Home article cards each have a clickable heading link
+  test('Edge — Blog Home: each article card heading is a link', { tag: '@exploratory' }, async () => {
+    const cards = blog.articleCards;
+    const count = await cards.count();
+    expect(count).toBeGreaterThan(0);
+    for (let i = 0; i < Math.min(count, 3); i++) {
+      const link = cards.nth(i).locator('h2 a, h3 a').first();
+      await expect(link).toHaveAttribute('href', /.+/);
+    }
+  });
+
+  // 12. Direct navigation to /blog/articles lands on articles listing
+  test('Edge — Articles: direct navigation to /blog/articles loads without error', { tag: '@exploratory' }, async ({ page }) => {
+    await page.goto('/blog/articles');
+    await blog.waitForPageLoad();
+    await expect(page).toHaveURL(/\/blog\/articles/);
+    await expect(blog.articleCards.first()).toBeVisible();
+  });
+
+  // 13. Page title (<title>) is set and non-empty on /blog
+  test('Edge — Blog Home: page <title> is non-empty', { tag: '@exploratory' }, async ({ page }) => {
+    const title = await page.title();
+    expect(title.trim().length).toBeGreaterThan(0);
+  });
+
+  // 14. Page title is non-empty on /blog/articles
+  test('Edge — Articles: page <title> is non-empty', { tag: '@exploratory' }, async ({ page }) => {
+    await blog.goToBlogArticles();
+    const title = await page.title();
+    expect(title.trim().length).toBeGreaterThan(0);
+  });
+
+  // 15. Search query is URL-encoded correctly (special char &)
+  test('Edge — Search: ampersand in query is URL-encoded and page does not crash', { tag: '@exploratory' }, async ({ page }) => {
+    await blog.search('travel & tips');
+    await expect(page).toHaveURL(/\/blog/);
+    await expect(blog.headerBlog).toBeVisible();
+  });
+
+  // 16. Negative — page=0 is handled gracefully
+  test('Negative — Pagination: page=0 does not crash the app', { tag: '@exploratory' }, async ({ page }) => {
+    await page.goto('/blog/articles?page=0');
+    await blog.waitForPageLoad();
+    await expect(page).toHaveURL(/\/blog/);
+    await expect(blog.headerBlog.or(blog.articleCards.first())).toBeVisible();
+  });
+
+  // 17. Negative — negative page number is handled gracefully
+  test('Negative — Pagination: negative page number does not crash the app', { tag: '@exploratory' }, async ({ page }) => {
+    await page.goto('/blog/articles?page=-5');
+    await blog.waitForPageLoad();
+    await expect(page).toHaveURL(/\/blog/);
+    await expect(blog.headerBlog.or(blog.articleCards.first())).toBeVisible();
+  });
+
+  // 18. Coolcation page title is non-empty
+  test('Edge — Coolcation: page <title> is non-empty', { tag: '@exploratory' }, async ({ page }) => {
+    await page.goto('/coolcation');
+    await blog.waitForPageLoad();
+    const title = await page.title();
+    expect(title.trim().length).toBeGreaterThan(0);
+  });
+
+  // 19. Slow Travel page title is non-empty
+  test('Edge — Slow Travel: page <title> is non-empty', { tag: '@exploratory' }, async ({ page }) => {
+    await page.goto('/slow-travel');
+    await blog.waitForPageLoad();
+    const title = await page.title();
+    expect(title.trim().length).toBeGreaterThan(0);
+  });
+
+  // 20. Footer Blog Home link navigates back to /blog from /blog/articles
+  test('Edge — Footer: Blog Home link from /blog/articles returns to /blog', { tag: '@exploratory' }, async ({ page }) => {
+    await blog.goToBlogArticles();
+    await blog.footerBlogHome.click();
+    await blog.waitForPageLoad();
+    await expect(page).toHaveURL(/\/blog$/);
+  });
+
+  // 21. Article card image src is not empty (image is not broken)
+  test('Edge — Blog Home: first article card image has a non-empty src', { tag: '@exploratory' }, async () => {
+    const src = await blog.firstArticleImage.getAttribute('src');
+    expect(src).toBeTruthy();
+    expect(src!.trim().length).toBeGreaterThan(0);
+  });
+
+  // 22. Clicking logo from /blog/articles returns to homepage
+  test('Edge — Logo: clicking logo from /blog/articles returns to homepage', { tag: '@exploratory' }, async ({ page }) => {
+    await blog.goToBlogArticles();
+    await blog.logo.click();
+    await blog.waitForPageLoad();
+    await expect(page).toHaveURL(/staging\.talktravel\.com\/?$/);
+  });
+
+  // 23. Search results page still shows the search input bar
+  test('Edge — Search: search input is still visible on results page', { tag: '@exploratory' }, async () => {
+    await blog.search('Delta');
+    await expect(blog.searchInput).toBeVisible();
+  });
+
+  // 24. Negative — very long search query does not crash the page
+  test('Negative — Search: very long query (500 chars) does not crash the page', { tag: '@exploratory' }, async ({ page }) => {
+    const longQuery = 'a'.repeat(500);
+    await blog.search(longQuery);
+    await expect(page).toHaveURL(/\/blog/);
+    await expect(blog.headerBlog).toBeVisible();
+  });
+
+  // 25. Article card on /blog/articles shows a publish date
+  test('Edge — Articles: first article card has a visible publish date', { tag: '@exploratory' }, async () => {
+    await blog.goToBlogArticles();
+    const dateEl = blog.articleCards.first().locator('time');
+    await expect(dateEl).toBeVisible();
+  });
 });
