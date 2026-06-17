@@ -54,9 +54,18 @@ export class CreatePostPage extends BasePage {
 
   async selectTopic(topicName: string): Promise<void> {
     await this.topicsInput.fill(topicName);
-    // Wait for dropdown to appear then click the matching option
-    await this.page.locator('[class*="option"]', { hasText: topicName }).first().waitFor({ state: 'visible' });
-    await this.page.locator('[class*="option"]', { hasText: topicName }).first().click();
+    // Wait for the dropdown to open
+    await this.page.getByRole('listbox').waitFor({ state: 'visible' });
+    // Prefer an existing option; fall back to "Create new topic" button
+    const existingOption = this.page.getByRole('option', { name: topicName, exact: true });
+    const createOption = this.page.getByRole('button', { name: new RegExp(`Create new topic.*${topicName}`, 'i') });
+    const exists = await existingOption.isVisible().catch(() => false);
+    if (exists) {
+      await existingOption.click();
+    } else {
+      await createOption.waitFor({ state: 'visible' });
+      await createOption.click();
+    }
   }
 
   async removeSelectedTopic(topicName: string): Promise<void> {
