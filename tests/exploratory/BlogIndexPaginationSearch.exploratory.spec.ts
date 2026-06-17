@@ -53,7 +53,7 @@ test.describe('Blog Index, Pagination & Search — Exploratory (Pre-Login)', () 
     await blog.searchInput.fill('   ');
     await blog.searchInput.press('Enter');
     await expect(page).toHaveURL(/\/blog/);
-    await expect(blog.blogHeroHeading.or(blog.articleCards.first())).toBeVisible();
+    await expect(blog.articleCards.first()).toBeVisible();
   });
 
   // 7. Negative — XSS in search does not crash the page
@@ -68,7 +68,7 @@ test.describe('Blog Index, Pagination & Search — Exploratory (Pre-Login)', () 
     await page.goto('/blog/articles?page=99999');
     await blog.waitForPageLoad();
     await expect(page).toHaveURL(/\/blog/);
-    await expect(blog.headerBlog.or(blog.articleCards.first())).toBeVisible();
+    await expect(blog.headerBlog).toBeVisible();
   });
 
   // 9. Negative — non-numeric page param is handled gracefully
@@ -76,7 +76,7 @@ test.describe('Blog Index, Pagination & Search — Exploratory (Pre-Login)', () 
     await page.goto('/blog/articles?page=abc');
     await blog.waitForPageLoad();
     await expect(page).toHaveURL(/\/blog/);
-    await expect(blog.headerBlog.or(blog.articleCards.first())).toBeVisible();
+    await expect(blog.headerBlog).toBeVisible();
   });
 
   // 10. Negative — unknown vanity URL slug returns a handled page, not a blank crash
@@ -133,7 +133,7 @@ test.describe('Blog Index, Pagination & Search — Exploratory (Pre-Login)', () 
     await page.goto('/blog/articles?page=0');
     await blog.waitForPageLoad();
     await expect(page).toHaveURL(/\/blog/);
-    await expect(blog.headerBlog.or(blog.articleCards.first())).toBeVisible();
+    await expect(blog.headerBlog).toBeVisible();
   });
 
   // 17. Negative — negative page number is handled gracefully
@@ -141,7 +141,7 @@ test.describe('Blog Index, Pagination & Search — Exploratory (Pre-Login)', () 
     await page.goto('/blog/articles?page=-5');
     await blog.waitForPageLoad();
     await expect(page).toHaveURL(/\/blog/);
-    await expect(blog.headerBlog.or(blog.articleCards.first())).toBeVisible();
+    await expect(blog.headerBlog).toBeVisible();
   });
 
   // 18. Coolcation page title is non-empty
