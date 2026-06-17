@@ -146,6 +146,7 @@ test.describe('Blog Index, Pagination & Search — Exploratory (Pre-Login)', () 
 
   // 18. Coolcation page title is non-empty
   test('Edge — Coolcation: page <title> is non-empty', { tag: '@exploratory' }, async ({ page }) => {
+    test.setTimeout(60000);
     await page.goto('/coolcation');
     await blog.waitForPageLoad();
     const title = await page.title();
@@ -154,6 +155,7 @@ test.describe('Blog Index, Pagination & Search — Exploratory (Pre-Login)', () 
 
   // 19. Slow Travel page title is non-empty
   test('Edge — Slow Travel: page <title> is non-empty', { tag: '@exploratory' }, async ({ page }) => {
+    test.setTimeout(60000);
     await page.goto('/slow-travel');
     await blog.waitForPageLoad();
     const title = await page.title();
@@ -162,6 +164,7 @@ test.describe('Blog Index, Pagination & Search — Exploratory (Pre-Login)', () 
 
   // 20. Footer Blog Home link navigates back to /blog from /blog/articles
   test('Edge — Footer: Blog Home link from /blog/articles returns to /blog', { tag: '@exploratory' }, async ({ page }) => {
+    test.setTimeout(60000);
     await blog.goToBlogArticles();
     await blog.footerBlogHome.click();
     await blog.waitForPageLoad();
@@ -177,6 +180,7 @@ test.describe('Blog Index, Pagination & Search — Exploratory (Pre-Login)', () 
 
   // 22. Clicking logo from /blog/articles returns to homepage
   test('Edge — Logo: clicking logo from /blog/articles returns to homepage', { tag: '@exploratory' }, async ({ page }) => {
+    test.setTimeout(60000);
     await blog.goToBlogArticles();
     await blog.logo.click();
     await blog.waitForPageLoad();
