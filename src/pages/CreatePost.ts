@@ -4,6 +4,7 @@ import { BasePage } from './BasePage';
 export class CreatePostPage extends BasePage {
   readonly emailInput: Locator;
   readonly passwordInput: Locator;
+  readonly logInLink: Locator;
   readonly logInBtn: Locator;
   readonly createPostBtn: Locator;
   readonly titleInput: Locator;
@@ -18,6 +19,7 @@ export class CreatePostPage extends BasePage {
 
     this.emailInput = page.getByRole('textbox', { name: 'Email, username, or phone *' });
     this.passwordInput = page.getByRole('textbox', { name: 'Password * Forgot password?' });
+    this.logInLink = page.getByRole('link', { name: 'Log in' });
     this.logInBtn = page.getByRole('button', { name: 'Log In' });
     this.createPostBtn = page.getByRole('link', { name: 'TalkTravel Create Post' });
     this.titleInput = page.getByRole('textbox', { name: 'Title *' });
@@ -28,13 +30,16 @@ export class CreatePostPage extends BasePage {
     this.cancelBtn = page.getByRole('button', { name: 'Cancel' });
   }
 
-  async login(email: string, password: string): Promise<void> {
-    await this.page.goto('https://staging.talktravel.com/login');
+  async loginAndGoToCreatePost(email: string, password: string): Promise<void> {
+    await this.page.goto('https://staging.talktravel.com/', { waitUntil: 'domcontentloaded' });
     await this.waitForPageLoad();
+    await this.logInLink.click();
     await this.emailInput.fill(email);
     await this.passwordInput.fill(password);
     await this.logInBtn.click();
-    await this.page.waitForURL(/staging\.talktravel\.com\/.+/);
+    await this.page.waitForLoadState('networkidle');
+    await this.createPostBtn.waitFor({ state: 'visible' });
+    await this.createPostBtn.click();
     await this.waitForPageLoad();
   }
 
@@ -46,12 +51,6 @@ export class CreatePostPage extends BasePage {
     }
   }
 
-  async goToCreatePost(): Promise<void> {
-    await this.page.goto('https://staging.talktravel.com/create-post', { waitUntil: 'domcontentloaded' });
-    await this.waitForPageLoad();
-    await this.dismissCookieBanner();
-  }
-
   async selectTopic(topicName: string): Promise<void> {
     await this.topicsInput.fill(topicName);
     await this.topicsInput.press('Enter');
@@ -59,6 +58,6 @@ export class CreatePostPage extends BasePage {
   }
 
   async removeSelectedTopic(topicName: string): Promise<void> {
-    await this.page.locator(`div`).filter({ hasText: new RegExp(`^${topicName}×$`) }).getByText('×').click();
+    await this.page.locator('div').filter({ hasText: new RegExp(`^${topicName}×$`) }).getByText('×').click();
   }
 }

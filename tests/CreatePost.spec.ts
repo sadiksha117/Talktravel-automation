@@ -9,8 +9,7 @@ test.describe('Create Post (Post-Login) — Positive Flows', () => {
 
   test.beforeEach(async ({ page }) => {
     createPost = new CreatePostPage(page);
-    await createPost.login(VALID_EMAIL, VALID_PASSWORD);
-    await createPost.goToCreatePost();
+    await createPost.loginAndGoToCreatePost(VALID_EMAIL, VALID_PASSWORD);
   });
 
   // ── Step 1: Page loads with all required elements ────────────────────────
