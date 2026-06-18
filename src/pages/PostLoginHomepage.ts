@@ -92,7 +92,17 @@ export class PostLoginHomepagePage extends BasePage {
   }
 
   async goToHomepage(): Promise<void> {
-    await this.page.goto('https://staging.talktravel.com/trending', { waitUntil: 'domcontentloaded' });
+    // The SPA can abort the in-flight navigation when its router redirects
+    // (e.g. /trending re-resolving while authenticated), surfacing as
+    // net::ERR_ABORTED even though the page loads fine. Swallow that specific
+    // error and let the subsequent load wait confirm the page is ready.
+    try {
+      await this.page.goto('https://staging.talktravel.com/trending', { waitUntil: 'commit' });
+    } catch (error) {
+      if (!(error instanceof Error) || !error.message.includes('net::ERR_ABORTED')) {
+        throw error;
+      }
+    }
     await this.waitForPageLoad();
     await this.dismissCookieBanner();
   }
