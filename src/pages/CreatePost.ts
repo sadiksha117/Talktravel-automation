@@ -36,7 +36,7 @@ export class CreatePostPage extends BasePage {
     await this.emailInput.fill(email);
     await this.passwordInput.fill(password);
     await this.logInBtn.click();
-    await this.page.waitForURL(/staging\.talktravel\.com\/.+/);
+    await this.page.waitForURL(/staging\.talktravel\.com\/(?!.*login)/, { timeout: 30000 });
     // Wait for Create Post link to appear — avoids waitForLoadState hang on SPA
     await this.createPostBtn.waitFor({ state: 'visible', timeout: 60000 });
     await this.createPostBtn.click();
