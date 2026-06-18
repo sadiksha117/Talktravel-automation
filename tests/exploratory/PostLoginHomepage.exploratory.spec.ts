@@ -320,4 +320,66 @@ test.describe('Post-Login Homepage — Exploratory (Edge & Negative)', () => {
   test('Usability — feed renders at least one post within 10s (no perpetual empty state)', { tag: '@exploratory' }, async () => {
     await expect(flow.feedPostCards.first()).toBeVisible({ timeout: 10000 });
   });
+
+  // ── Error surfacing / diagnostics ──────────────────────────────────────────
+  // These actively collect runtime problems and fail with a detailed report,
+  // so a real defect in the app is shown explicitly in the test output.
+
+  test('Diagnostic — no HTTP 4xx/5xx responses while loading /trending', { tag: '@exploratory' }, async ({ page }) => {
+    const bad: string[] = [];
+    page.on('response', res => {
+      const s = res.status();
+      if (s >= 400) bad.push(`${s} ${res.request().method()} ${res.url()}`);
+    });
+    await page.goto(`${BASE}/trending`, { waitUntil: 'domcontentloaded' });
+    await page.waitForLoadState('load');
+    expect(bad, `Failing responses:\n${bad.join('\n')}`).toEqual([]);
+  });
+
+  test('Diagnostic — no failed/aborted network requests while loading /trending', { tag: '@exploratory' }, async ({ page }) => {
+    const failed: string[] = [];
+    page.on('requestfailed', req => {
+      failed.push(`${req.method()} ${req.url()} — ${req.failure()?.errorText ?? 'unknown'}`);
+    });
+    await page.goto(`${BASE}/trending`, { waitUntil: 'domcontentloaded' });
+    await page.waitForLoadState('load');
+    expect(failed, `Failed requests:\n${failed.join('\n')}`).toEqual([]);
+  });
+
+  test('Diagnostic — no uncaught page (JS) errors on /trending', { tag: '@exploratory' }, async ({ page }) => {
+    const pageErrors: string[] = [];
+    page.on('pageerror', err => pageErrors.push(err.message));
+    await page.goto(`${BASE}/trending`, { waitUntil: 'domcontentloaded' });
+    await page.waitForLoadState('load');
+    expect(pageErrors, `Uncaught JS errors:\n${pageErrors.join('\n')}`).toEqual([]);
+  });
+
+  test('Diagnostic — no broken images (all rendered images load successfully)', { tag: '@exploratory' }, async ({ page }) => {
+    await page.goto(`${BASE}/trending`, { waitUntil: 'domcontentloaded' });
+    await page.waitForLoadState('load');
+    const broken = await page.$$eval('img', els =>
+      els
+        .filter(img => img.complete && img.naturalWidth === 0 && (img.getAttribute('src') ?? '') !== '')
+        .map(img => img.getAttribute('src') ?? '(no src)')
+    );
+    expect(broken, `Broken images:\n${broken.join('\n')}`).toEqual([]);
+  });
+
+  test('Diagnostic — switching every feed tab triggers no server errors', { tag: '@exploratory' }, async ({ page }) => {
+    const bad: string[] = [];
+    page.on('response', res => { if (res.status() >= 500) bad.push(`${res.status()} ${res.url()}`); });
+    await flow.feedTabLatestLink.click();
+    await flow.feedTabForYouLink.click();
+    await flow.feedTabTrendingLink.click();
+    await page.waitForLoadState('networkidle');
+    expect(bad, `5xx errors during tab switching:\n${bad.join('\n')}`).toEqual([]);
+  });
+
+  test('Diagnostic — voting triggers no server (5xx) error response', { tag: '@exploratory' }, async ({ page }) => {
+    const bad: string[] = [];
+    page.on('response', res => { if (res.status() >= 500) bad.push(`${res.status()} ${res.request().method()} ${res.url()}`); });
+    await flow.firstUpvoteBtn.click();
+    await page.waitForLoadState('networkidle');
+    expect(bad, `5xx errors on vote:\n${bad.join('\n')}`).toEqual([]);
+  });
 });
