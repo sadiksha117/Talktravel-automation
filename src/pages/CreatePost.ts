@@ -36,11 +36,10 @@ export class CreatePostPage extends BasePage {
     await this.emailInput.fill(email);
     await this.passwordInput.fill(password);
     await this.logInBtn.click();
-    await this.page.waitForURL(/staging\.talktravel\.com\/(?!.*login)/, { timeout: 30000 });
-    // Wait for Create Post link to appear — avoids waitForLoadState hang on SPA
-    await this.createPostBtn.waitFor({ state: 'visible', timeout: 60000 });
-    await this.createPostBtn.click();
-    // Create Post opens a modal — wait for the form title rather than a page load
+    // Wait until we're past the login page (any authenticated route)
+    await this.page.waitForURL(/staging\.talktravel\.com\/(?!.*\blogin\b)/, { timeout: 30000 });
+    // Navigate directly to the create post page — avoids nav-button timing issues in serial runs
+    await this.page.goto('https://staging.talktravel.com/create-post', { waitUntil: 'domcontentloaded' });
     await this.titleInput.waitFor({ state: 'visible', timeout: 15000 });
   }
 
