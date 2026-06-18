@@ -58,4 +58,21 @@ export class PostLoginHomepageExploratoryPage extends PostLoginHomepagePage {
     this.footerTermsLink = page.getByRole('contentinfo').getByRole('link', { name: 'Terms', exact: true });
     this.footerCopyright = page.getByRole('contentinfo').getByText(/© \d{4} TalkTravel/);
   }
+
+  /**
+   * Best-effort logout. Clicks a visible Log out control if present,
+   * otherwise opens a likely account/avatar menu first. Resolves once the
+   * app leaves the authenticated feed (or after a short grace period).
+   */
+  async logout(): Promise<void> {
+    if (!(await this.leftNavLogout.isVisible().catch(() => false))) {
+      await this.page
+        .getByRole('button', { name: /account|profile|avatar|menu|settings/i })
+        .first()
+        .click({ timeout: 3000 })
+        .catch(() => { /* no menu trigger — fall through */ });
+    }
+    await this.leftNavLogout.click({ timeout: 5000 }).catch(() => { /* control not found */ });
+    await this.page.waitForURL(/\/login|talktravel\.com\/?$/, { timeout: 10000 }).catch(() => { /* SPA may not change URL */ });
+  }
 }
