@@ -72,12 +72,12 @@ test.describe('Post-Login Homepage — Exploratory (Edge & Negative)', () => {
   // ── Direct URL navigation while logged in ────────────────────────────────
 
   test('Negative — visiting /login while logged in redirects away from /login', { tag: '@exploratory' }, async ({ page }) => {
-    await page.goto('https://staging.talktravel.com/login');
+    await flow.safeGoto('https://staging.talktravel.com/login');
     await expect(page).not.toHaveURL(/\/login/);
   });
 
   test('Negative — visiting /register while logged in redirects away from /register', { tag: '@exploratory' }, async ({ page }) => {
-    await page.goto('https://staging.talktravel.com/register');
+    await flow.safeGoto('https://staging.talktravel.com/register');
     await expect(page).not.toHaveURL(/\/register/);
   });
 
@@ -94,14 +94,17 @@ test.describe('Post-Login Homepage — Exploratory (Edge & Negative)', () => {
 
   test('Edge — browser back after switching to Latest tab returns to /trending', { tag: '@exploratory' }, async ({ page }) => {
     await flow.feedTabLatestLink.click();
-    await page.goBack();
+    await expect(page).toHaveURL(/\/latest/);
+    await page.goBack().catch(e => { if (!String(e).includes('ERR_ABORTED')) throw e; });
     await expect(page).toHaveURL(/\/trending/);
   });
 
   test('Edge — browser forward after going back restores /latest', { tag: '@exploratory' }, async ({ page }) => {
     await flow.feedTabLatestLink.click();
-    await page.goBack();
-    await page.goForward();
+    await expect(page).toHaveURL(/\/latest/);
+    await page.goBack().catch(e => { if (!String(e).includes('ERR_ABORTED')) throw e; });
+    await expect(page).toHaveURL(/\/trending/);
+    await page.goForward().catch(e => { if (!String(e).includes('ERR_ABORTED')) throw e; });
     await expect(page).toHaveURL(/\/latest/);
   });
 

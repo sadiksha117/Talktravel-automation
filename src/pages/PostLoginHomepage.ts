@@ -92,15 +92,27 @@ export class PostLoginHomepagePage extends BasePage {
   }
 
   async goToHomepage(): Promise<void> {
+    await this.safeGoto('https://staging.talktravel.com/trending');
+    await this.page.waitForLoadState('domcontentloaded');
+    await this.waitForPageLoad();
+    await this.dismissCookieBanner();
+  }
+
+  /**
+   * Navigate to a URL, tolerating net::ERR_ABORTED.
+   * The SPA frequently aborts the in-flight navigation when its router
+   * redirects (e.g. visiting /login or /trending while authenticated).
+   * That abort is benign — the app lands on the correct page — so we
+   * swallow only that error and let callers assert on the resulting URL.
+   */
+  async safeGoto(url: string): Promise<void> {
     try {
-      await this.page.goto('https://staging.talktravel.com/trending', { waitUntil: 'domcontentloaded' });
+      await this.page.goto(url, { waitUntil: 'domcontentloaded' });
     } catch (e) {
       if (!String(e).includes('ERR_ABORTED')) throw e;
       // ERR_ABORTED is benign here — the app redirected mid-navigation
     }
     await this.page.waitForLoadState('domcontentloaded');
-    await this.waitForPageLoad();
-    await this.dismissCookieBanner();
   }
 
   async dismissCookieBanner(): Promise<void> {
