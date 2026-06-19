@@ -391,9 +391,21 @@ test.describe('Post-Login Homepage — Exploratory (Edge & Negative)', () => {
 
   test('Diagnostic — voting triggers no server (5xx) error response', { tag: '@exploratory' }, async ({ page }) => {
     const bad: string[] = [];
-    page.on('response', res => { if (res.status() >= 500) bad.push(`${res.status()} ${res.request().method()} ${res.url()}`); });
+    page.on('response', res => {
+      if (res.status() >= 500) bad.push(`${res.status()} ${res.request().method()} ${res.url()}`);
+    });
+
+    // Confirm we're actually logged in before clicking — fail fast if session expired.
+    await expect(flow.feedPostCards.first()).toBeVisible();
+
+    // Capture the vote response specifically, rather than waiting for the whole network to go quiet.
+    const voteResponse = page.waitForResponse(res =>
+      /\/vote|\/upvote|\/posts\/.*\/like/i.test(res.url()) && res.request().method() !== 'OPTIONS',
+      { timeout: 10000 }
+    );
     await flow.firstUpvoteBtn.click();
-    await page.waitForLoadState('networkidle');
+    await voteResponse;
+
     expect(bad, `5xx errors on vote:\n${bad.join('\n')}`).toEqual([]);
   });
 });
