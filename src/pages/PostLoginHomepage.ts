@@ -109,8 +109,11 @@ export class PostLoginHomepagePage extends BasePage {
     try {
       await this.page.goto(url, { waitUntil: 'domcontentloaded' });
     } catch (e) {
-      if (!String(e).includes('ERR_ABORTED')) throw e;
-      // ERR_ABORTED is benign here — the app redirected mid-navigation
+      const msg = String(e);
+      // Both are benign SPA redirect artifacts: the app re-navigates to the
+      // same/authenticated route while our goto is still in flight.
+      const benign = msg.includes('ERR_ABORTED') || msg.includes('interrupted by another navigation');
+      if (!benign) throw e;
     }
     await this.page.waitForLoadState('domcontentloaded');
   }

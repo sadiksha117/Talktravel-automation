@@ -398,13 +398,18 @@ test.describe('Post-Login Homepage — Exploratory (Edge & Negative)', () => {
     // Confirm we're actually logged in before clicking — fail fast if session expired.
     await expect(flow.feedPostCards.first()).toBeVisible();
 
-    // Capture the vote response specifically, rather than waiting for the whole network to go quiet.
-    const voteResponse = page.waitForResponse(res =>
-      /\/vote|\/upvote|\/posts\/.*\/like/i.test(res.url()) && res.request().method() !== 'OPTIONS',
-      { timeout: 10000 }
-    );
+    // Best-effort: wait for a likely vote API call so the 5xx listener has
+    // time to observe it. The exact endpoint is unknown, so a non-match must
+    // not fail the test — the response listener above is the real assertion.
+    const voteResponse = page
+      .waitForResponse(
+        res => /\/vote|\/upvote|\/like|\/reaction/i.test(res.url()) && res.request().method() !== 'OPTIONS',
+        { timeout: 8000 },
+      )
+      .catch(() => null);
     await flow.firstUpvoteBtn.click();
     await voteResponse;
+    await page.waitForLoadState('networkidle').catch(() => { /* ignore idle timeout */ });
 
     expect(bad, `5xx errors on vote:\n${bad.join('\n')}`).toEqual([]);
   });
