@@ -339,7 +339,10 @@ test.describe('Post-Login Homepage — Exploratory (Edge & Negative)', () => {
   test('Diagnostic — no failed/aborted network requests while loading /trending', { tag: '@exploratory' }, async ({ page }) => {
     const failed: string[] = [];
     page.on('requestfailed', req => {
-      failed.push(`${req.method()} ${req.url()} — ${req.failure()?.errorText ?? 'unknown'}`);
+      const err = req.failure()?.errorText ?? 'unknown';
+      // Ignore Next.js RSC prefetches that get cancelled — these are expected.
+      if (err === 'net::ERR_ABORTED') return;
+      failed.push(`${req.method()} ${req.url()} — ${err}`);
     });
     await page.goto(`${BASE}/trending`, { waitUntil: 'domcontentloaded' });
     await page.waitForLoadState('load');
