@@ -36,8 +36,13 @@ export class PostLoginHomepageExploratoryPage extends PostLoginHomepagePage {
     super(page);
 
     this.feedTabTrendingLink = page.getByRole('link', { name: 'Trending', exact: true });
-    this.feedTabLatestLink = page.getByRole('link', { name: 'Latest', exact: true });
-    this.feedTabForYouLink = page.locator('a[href="/for-you"]');
+    // Scope to the feed-tabs list (anchored by the Trending link) so 'Latest'
+    // doesn't also match a same-named footer/header link elsewhere on the page.
+    const feedTabsList = page
+      .locator('ul')
+      .filter({ has: page.getByRole('link', { name: 'Trending', exact: true }) });
+    this.feedTabLatestLink = feedTabsList.getByRole('link', { name: 'Latest', exact: true });
+    this.feedTabForYouLink = feedTabsList.locator('a[href="/for-you"]');
 
     this.firstUpvoteBtn = page.getByRole('button', { name: 'Upvote' }).first();
     this.firstDownvoteBtn = page.getByRole('button', { name: 'Downvote' }).first();
