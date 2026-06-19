@@ -370,11 +370,22 @@ test.describe('Post-Login Homepage — Exploratory (Edge & Negative)', () => {
 
   test('Diagnostic — switching every feed tab triggers no server errors', { tag: '@exploratory' }, async ({ page }) => {
     const bad: string[] = [];
-    page.on('response', res => { if (res.status() >= 500) bad.push(`${res.status()} ${res.url()}`); });
+    page.on('response', res => {
+      if (res.status() >= 500) bad.push(`${res.status()} ${res.url()}`);
+    });
+
     await flow.feedTabLatestLink.click();
+    await expect(page).toHaveURL(/\/latest/);
+    await expect(flow.feedPostCards.first()).toBeVisible();
+
     await flow.feedTabForYouLink.click();
+    await expect(page).toHaveURL(/\/for-you/);
+    await expect(flow.feedPostCards.first()).toBeVisible();
+
     await flow.feedTabTrendingLink.click();
-    await page.waitForLoadState('networkidle');
+    await expect(page).toHaveURL(/\/trending/);
+    await expect(flow.feedPostCards.first()).toBeVisible();
+
     expect(bad, `5xx errors during tab switching:\n${bad.join('\n')}`).toEqual([]);
   });
 
