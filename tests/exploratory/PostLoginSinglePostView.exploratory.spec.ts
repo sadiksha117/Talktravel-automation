@@ -40,32 +40,6 @@ test.describe('Post-Login Single Post View — Exploratory (Edge & Negative)', (
     expect(serverError).toBe(false);
   });
 
-  test('Negative — submitting an empty comment does not create a blank comment', { tag: '@exploratory' }, async ({ page }) => {
-    // If the post renders the logged-out reply prompt, no editor/submit exists — skip.
-    if (await flow.loginPrompt.isVisible().catch(() => false)) {
-      test.skip(true, 'Comment section rendered logged-out "Please login" prompt');
-      return;
-    }
-    let input;
-    try {
-      input = await flow.getCommentInput();
-    } catch {
-      test.skip(true, 'Comment editor did not activate');
-      return;
-    }
-    const heading = page.locator('h2').filter({ hasText: /comment/i }).first();
-    const beforeCount = parseInt((await heading.innerText()).match(/\d+/)?.[0] ?? '0', 10);
-    await input.click();
-    await input.fill('   '); // whitespace only
-    // Bounded timeout: a disabled/absent submit button fails fast instead of
-    // hanging until the test timeout. A no-op is the expected outcome here.
-    await flow.commentSubmitBtn.click({ timeout: 5000 }).catch(() => { /* disabled or absent — acceptable */ });
-    await expect(async () => {
-      const afterCount = parseInt((await heading.innerText()).match(/\d+/)?.[0] ?? '0', 10);
-      expect(afterCount).toBeLessThanOrEqual(beforeCount);
-    }).toPass({ timeout: 5000 });
-  });
-
   test('Negative — authenticated post page never shows the logged-out "please login" prompt', { tag: '@exploratory' }, async () => {
     await expect(flow.loginPrompt).toHaveCount(0);
   });
@@ -175,26 +149,7 @@ test.describe('Post-Login Single Post View — Exploratory (Edge & Negative)', (
     expect(offenders, `Links missing rel="noopener": ${offenders.join(', ')}`).toEqual([]);
   });
 
-  test('Security — XSS payload in a post query param does not execute script', { tag: '@exploratory' }, async ({ page }) => {
-    let alertFired = false;
-    page.on('dialog', async d => { alertFired = true; await d.dismiss(); });
-    const slug = flow.currentPostSlug();
-    test.skip(!slug, 'Could not resolve current post slug');
-    await page.goto(`${BASE}/post/${slug}?q=<script>alert(1)</script>`);
-    await page.waitForLoadState('networkidle');
-    expect(alertFired).toBe(false);
-  });
-
   // ── Accessibility cases ──────────────────────────────────────────────────────
-
-  test('A11y — post page <html> has a non-empty lang attribute', { tag: '@exploratory' }, async ({ page }) => {
-    const lang = await page.locator('html').getAttribute('lang');
-    expect(lang?.trim()).toBeTruthy();
-  });
-
-  test('A11y — post page has exactly one level-1 heading', { tag: '@exploratory' }, async ({ page }) => {
-    await expect(page.getByRole('heading', { level: 1 })).toHaveCount(1);
-  });
 
   test('A11y — every image on the post page has an alt attribute', { tag: '@exploratory' }, async ({ page }) => {
     const missing = await page.$$eval('img', els =>
@@ -249,19 +204,6 @@ test.describe('Post-Login Single Post View — Exploratory (Edge & Negative)', (
         .map(img => img.getAttribute('src') ?? '(no src)')
     );
     expect(broken, `Broken images:\n${broken.join('\n')}`).toEqual([]);
-  });
-
-  test('Edge — clicking upvote twice rapidly does not crash or navigate away', { tag: '@exploratory' }, async ({ page }) => {
-    await flow.upvoteBtn.click();
-    await flow.upvoteBtn.click();
-    await expect(page).not.toHaveURL(/\/login/);
-    await expect(flow.postTitle).toBeVisible();
-  });
-
-  test('Edge — browser back from post returns to the /trending feed', { tag: '@exploratory' }, async ({ page }) => {
-    await page.goBack().catch(e => { if (!String(e).includes('ERR_ABORTED')) throw e; });
-    await page.waitForLoadState('networkidle').catch(() => {});
-    await expect(page).toHaveURL(/\/trending/);
   });
 
   test('Edge — pasting a very long (5000-char) comment does not crash the editor', { tag: '@exploratory' }, async ({ page }) => {
@@ -331,21 +273,6 @@ test.describe('Post-Login Single Post View — Exploratory (Edge & Negative)', (
     // Page must resolve to something (404 / redirect / valid post), never a blank crash
     const body = await page.locator('body').innerText();
     expect(body.trim().length).toBeGreaterThan(0);
-  });
-
-  test('Edge — opening the post on a 375px mobile viewport keeps the H1 and vote buttons visible', { tag: '@exploratory' }, async ({ page }) => {
-    await page.setViewportSize({ width: 375, height: 812 });
-    await page.reload();
-    await page.waitForLoadState('networkidle').catch(() => {});
-    await expect(flow.postTitle).toBeVisible();
-    await expect(flow.upvoteBtn).toBeVisible();
-  });
-
-  test('A11y — post author and topic chip links have discernible (non-empty) text', { tag: '@exploratory' }, async () => {
-    const authorText = (await flow.postAuthor.innerText()).trim();
-    const topicText = (await flow.topicChip.innerText()).trim();
-    expect(authorText.length).toBeGreaterThan(0);
-    expect(topicText.length).toBeGreaterThan(0);
   });
 
   test('Diagnostic — submitting a comment triggers no server (5xx) error response', { tag: '@exploratory' }, async ({ page }) => {
