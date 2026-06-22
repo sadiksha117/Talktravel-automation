@@ -81,8 +81,17 @@ export class PostLoginSinglePostViewPage extends BasePage {
   }
 
   async login(email: string, password: string): Promise<void> {
-    await this.page.goto('https://staging.talktravel.com/login');
-    await this.waitForPageLoad();
+    // Retry the login navigation — under parallel workers staging can return
+    // ERR_ABORTED or be slow to render the form on the first hit.
+    for (let attempt = 1; attempt <= 3; attempt++) {
+      try {
+        await this.page.goto('https://staging.talktravel.com/login', { waitUntil: 'domcontentloaded' });
+        break;
+      } catch (err) {
+        if (attempt === 3) throw err;
+        await this.page.waitForTimeout(attempt * 1500);
+      }
+    }
     const emailField = this.page
       .getByRole('textbox', { name: /email|username|phone/i })
       .or(this.page.locator('input[type="email"]'))
@@ -92,6 +101,9 @@ export class PostLoginSinglePostViewPage extends BasePage {
       .locator('button[type="submit"]')
       .or(this.page.getByRole('button', { name: /log in|sign in/i }))
       .first();
+    // Explicitly wait for the form to mount before filling — fails fast with a
+    // clear message if the login page didn't render, rather than hanging.
+    await emailField.waitFor({ state: 'visible', timeout: 30000 });
     await emailField.fill(email);
     await passwordField.fill(password);
     await submitBtn.click();

@@ -9,6 +9,10 @@ export default defineConfig({
   reporter: [['html'], ['list']],
   use: {
     baseURL: 'https://staging.talktravel.com',
+    // Cap individual actions/navigations so a stuck locator fails fast with a
+    // clear log instead of silently consuming the whole 180s test timeout.
+    actionTimeout: 20000,
+    navigationTimeout: 45000,
     trace: 'on-first-retry',
     screenshot: 'only-on-failure',
     video: 'on-first-retry',
