@@ -134,15 +134,22 @@ test.describe('Post-Login Single Post View — Exploratory (Edge & Negative)', (
     expect((hsts ?? '').length).toBeGreaterThan(0);
   });
 
-  test('Security — response headers do not expose X-Powered-By server info', { tag: '@exploratory' }, async ({ page }) => {
-    const exposed: string[] = [];
+  test('Security — post document enforces a CSP that forbids inline script (no unsafe-inline)', { tag: '@exploratory' }, async ({ page }) => {
+    // HARD: a real, meaningful Content-Security-Policy on the document response that
+    // constrains scripts and does not weaken itself with 'unsafe-inline'. Most SPA
+    // hosts ship either no CSP or one that allows inline scripts — this exposes that.
+    let csp: string | undefined;
     page.on('response', res => {
-      const h = res.headers()['x-powered-by'];
-      if (h && res.url().includes('/post/')) exposed.push(h);
+      if (res.request().resourceType() === 'document' && res.url().includes('/post/')) {
+        csp = res.headers()['content-security-policy'];
+      }
     });
-    await page.reload();
+    await page.reload({ waitUntil: 'domcontentloaded' });
     await page.waitForLoadState('networkidle').catch(() => {});
-    expect(exposed).toHaveLength(0);
+    expect(csp, 'No Content-Security-Policy header on the post document').toBeTruthy();
+    const policy = (csp ?? '').toLowerCase();
+    expect(policy, 'CSP defines neither script-src nor default-src').toMatch(/script-src|default-src/);
+    expect(policy, "CSP weakens script execution with 'unsafe-inline'").not.toContain("'unsafe-inline'");
   });
 
   test('Security — no plaintext password is persisted in local/session storage after login', { tag: '@exploratory' }, async ({ page }) => {
@@ -212,9 +219,25 @@ test.describe('Post-Login Single Post View — Exploratory (Edge & Negative)', (
     expect(unnamed, 'Visible buttons without an accessible name').toBe(0);
   });
 
-  test('A11y — upvote button is keyboard focusable', { tag: '@exploratory' }, async () => {
-    await flow.upvoteBtn.focus();
-    await expect(flow.upvoteBtn).toBeFocused();
+  test('Performance — post page Largest Contentful Paint is within the 2.5s "good" budget', { tag: '@exploratory' }, async ({ page, browserName }) => {
+    // HARD: Core Web Vitals "good" LCP threshold. Staging, image-heavy posts and
+    // client-side hydration routinely blow past 2.5s. LCP API is Chromium-only.
+    test.skip(browserName !== 'chromium', 'largest-contentful-paint PerformanceObserver is Chromium-only');
+    await page.reload({ waitUntil: 'load' });
+    const lcp = await page.evaluate<number>(() => new Promise<number>(resolve => {
+      let last = 0;
+      new PerformanceObserver(list => {
+        for (const entry of list.getEntries()) {
+          last = (entry as PerformanceEntry & { renderTime?: number; loadTime?: number }).renderTime
+            ?? (entry as PerformanceEntry & { loadTime?: number }).loadTime
+            ?? entry.startTime;
+        }
+      }).observe({ type: 'largest-contentful-paint', buffered: true });
+      // Allow paints to settle, then report the latest (final) LCP candidate.
+      setTimeout(() => resolve(last), 3000);
+    }));
+    expect(lcp, 'No LCP entry was recorded').toBeGreaterThan(0);
+    expect(lcp, `LCP ${Math.round(lcp)}ms exceeds the 2500ms budget`).toBeLessThan(2500);
   });
 
   // ── Edge cases ───────────────────────────────────────────────────────────────
