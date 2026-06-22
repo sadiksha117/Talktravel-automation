@@ -370,4 +370,107 @@ test.describe('Post-Login Single Post View — Exploratory (Edge & Negative)', (
     await page.waitForLoadState('networkidle').catch(() => {});
     expect(bad, `5xx errors on comment submit:\n${bad.join('\n')}`).toEqual([]);
   });
+
+  // ── New adversarial / hard cases (likely to surface real defects) ─────────────
+
+  test('Security — auth/session cookies set HttpOnly, Secure and SameSite flags', { tag: '@exploratory' }, async ({ page }) => {
+    // HARD: session cookies missing HttpOnly/Secure/SameSite are a real, common defect.
+    const cookies = await page.context().cookies();
+    const authCookies = cookies.filter(c => /sess|token|jwt|auth|sid|csrf/i.test(c.name));
+    test.skip(authCookies.length === 0, 'No session-like cookies present to evaluate');
+    const offenders = authCookies
+      .filter(c => !c.httpOnly || !c.secure || c.sameSite === 'None')
+      .map(c => `${c.name} (httpOnly=${c.httpOnly}, secure=${c.secure}, sameSite=${c.sameSite})`);
+    expect(offenders, `Insecure auth cookies: ${offenders.join('; ')}`).toEqual([]);
+  });
+
+  test('Security — post document sends X-Content-Type-Options: nosniff', { tag: '@exploratory' }, async ({ page }) => {
+    let nosniff: string | undefined;
+    page.on('response', res => {
+      if (res.request().resourceType() === 'document' && res.url().includes('/post/')) {
+        nosniff = res.headers()['x-content-type-options'];
+      }
+    });
+    await page.reload({ waitUntil: 'domcontentloaded' });
+    await page.waitForLoadState('networkidle').catch(() => {});
+    expect((nosniff ?? '').toLowerCase()).toBe('nosniff');
+  });
+
+  test('Security — post document sends a non-unsafe Referrer-Policy header', { tag: '@exploratory' }, async ({ page }) => {
+    let referrer: string | undefined;
+    page.on('response', res => {
+      if (res.request().resourceType() === 'document' && res.url().includes('/post/')) {
+        referrer = res.headers()['referrer-policy'];
+      }
+    });
+    await page.reload({ waitUntil: 'domcontentloaded' });
+    await page.waitForLoadState('networkidle').catch(() => {});
+    expect(referrer, 'No Referrer-Policy header').toBeTruthy();
+    expect((referrer ?? '').toLowerCase()).not.toBe('unsafe-url');
+  });
+
+  test('Security — no public JavaScript source maps are served in production', { tag: '@exploratory' }, async ({ page }) => {
+    // HARD: shipping .js.map files leaks source. Probe the scripts referenced on the page.
+    const scriptUrls = await page.$$eval('script[src]', els =>
+      els.map(s => (s as HTMLScriptElement).src).filter(u => u.startsWith('http'))
+    );
+    test.skip(scriptUrls.length === 0, 'No external scripts to probe');
+    const leaked: string[] = [];
+    for (const url of scriptUrls.slice(0, 8)) {
+      const mapUrl = `${url}.map`;
+      const resp = await page.request.get(mapUrl).catch(() => null);
+      if (resp && resp.status() === 200) leaked.push(mapUrl);
+    }
+    expect(leaked, `Publicly accessible source maps:\n${leaked.join('\n')}`).toEqual([]);
+  });
+
+  test('Edge — post page has no duplicate element id attributes', { tag: '@exploratory' }, async ({ page }) => {
+    // HARD: duplicate ids are a frequent real DOM defect that breaks label/aria wiring.
+    const dupes = await page.$$eval('[id]', els => {
+      const seen = new Map<string, number>();
+      for (const el of els) {
+        const id = el.id;
+        if (id) seen.set(id, (seen.get(id) ?? 0) + 1);
+      }
+      return [...seen.entries()].filter(([, n]) => n > 1).map(([id, n]) => `${id} ×${n}`);
+    });
+    expect(dupes, `Duplicate element ids: ${dupes.join(', ')}`).toEqual([]);
+  });
+
+  test('A11y — heading outline has no skipped levels (e.g. h1 → h3)', { tag: '@exploratory' }, async ({ page }) => {
+    // HARD: heading-level jumps are a common WCAG 1.3.1 failure.
+    const levels = await page.$$eval('h1,h2,h3,h4,h5,h6', els =>
+      (els as HTMLElement[])
+        .filter(h => !!(h.offsetWidth || h.offsetHeight || h.getClientRects().length))
+        .map(h => parseInt(h.tagName.substring(1), 10))
+    );
+    test.skip(levels.length < 2, 'Not enough headings to evaluate outline');
+    const jumps: string[] = [];
+    for (let i = 1; i < levels.length; i++) {
+      if (levels[i] - levels[i - 1] > 1) jumps.push(`h${levels[i - 1]} → h${levels[i]}`);
+    }
+    expect(jumps, `Skipped heading levels: ${jumps.join(', ')}`).toEqual([]);
+  });
+
+  test('Performance — post document Time To First Byte is under 800ms', { tag: '@exploratory' }, async ({ page }) => {
+    // HARD: a strict TTFB budget that a slow/cold staging backend often misses.
+    await page.reload({ waitUntil: 'commit' });
+    const ttfb = await page.evaluate(() => {
+      const nav = performance.getEntriesByType('navigation')[0] as PerformanceNavigationTiming | undefined;
+      return nav ? nav.responseStart - nav.requestStart : -1;
+    });
+    expect(ttfb, 'No navigation timing entry').toBeGreaterThanOrEqual(0);
+    expect(ttfb, `TTFB ${Math.round(ttfb)}ms exceeds 800ms budget`).toBeLessThan(800);
+  });
+
+  test('Security — no mixed content: post page issues no insecure http:// subresource requests', { tag: '@exploratory' }, async ({ page }) => {
+    const insecure: string[] = [];
+    page.on('request', req => {
+      const url = req.url();
+      if (url.startsWith('http://') && !url.startsWith('http://localhost')) insecure.push(url);
+    });
+    await page.reload({ waitUntil: 'load' });
+    await page.waitForLoadState('networkidle').catch(() => {});
+    expect(insecure, `Insecure http:// requests:\n${insecure.join('\n')}`).toEqual([]);
+  });
 });
