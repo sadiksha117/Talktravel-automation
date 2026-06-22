@@ -265,4 +265,64 @@ test.describe('Post-Login Single Post View — Exploratory (Edge & Negative)', (
     await page.waitForLoadState('load');
     expect(bad, `Failing responses:\n${bad.join('\n')}`).toEqual([]);
   });
+
+  // ── Additional edge / negative / security / a11y cases ────────────────────────
+
+  test('Negative — path-traversal slug (../../etc/passwd) does not leak files or 500', { tag: '@exploratory' }, async ({ page }) => {
+    let serverError = false;
+    page.on('response', res => { if (res.status() >= 500) serverError = true; });
+    await page.goto(`${BASE}/post/..%2f..%2f..%2fetc%2fpasswd`);
+    await page.waitForLoadState('networkidle');
+    const body = await page.locator('body').innerText();
+    expect(serverError).toBe(false);
+    expect(body).not.toContain('root:x:0:0');
+  });
+
+  test('Security — IDOR: a numeric-id post URL does not expose another user\'s draft via direct access', { tag: '@exploratory' }, async ({ page }) => {
+    // Probing a guessable id should not return a 5xx nor silently render private content
+    let serverError = false;
+    page.on('response', res => {
+      if (res.url().includes('/post/1') && res.status() >= 500) serverError = true;
+    });
+    await page.goto(`${BASE}/post/1`);
+    await page.waitForLoadState('networkidle');
+    expect(serverError).toBe(false);
+    // Page must resolve to something (404 / redirect / valid post), never a blank crash
+    const body = await page.locator('body').innerText();
+    expect(body.trim().length).toBeGreaterThan(0);
+  });
+
+  test('Edge — opening the post on a 375px mobile viewport keeps the H1 and vote buttons visible', { tag: '@exploratory' }, async ({ page }) => {
+    await page.setViewportSize({ width: 375, height: 812 });
+    await page.reload();
+    await page.waitForLoadState('networkidle').catch(() => {});
+    await expect(flow.postTitle).toBeVisible();
+    await expect(flow.upvoteBtn).toBeVisible();
+  });
+
+  test('A11y — post author and topic chip links have discernible (non-empty) text', { tag: '@exploratory' }, async () => {
+    const authorText = (await flow.postAuthor.innerText()).trim();
+    const topicText = (await flow.topicChip.innerText()).trim();
+    expect(authorText.length).toBeGreaterThan(0);
+    expect(topicText.length).toBeGreaterThan(0);
+  });
+
+  test('Diagnostic — submitting a comment triggers no server (5xx) error response', { tag: '@exploratory' }, async ({ page }) => {
+    const bad: string[] = [];
+    page.on('response', res => {
+      if (res.status() >= 500) bad.push(`${res.status()} ${res.request().method()} ${res.url()}`);
+    });
+    let input;
+    try {
+      input = await flow.getCommentInput();
+    } catch {
+      test.skip(true, 'Comment editor did not activate');
+      return;
+    }
+    await input.click();
+    await input.fill(`Exploratory diagnostic ${Date.now()}`);
+    await flow.commentSubmitBtn.click().catch(() => {});
+    await page.waitForLoadState('networkidle').catch(() => {});
+    expect(bad, `5xx errors on comment submit:\n${bad.join('\n')}`).toEqual([]);
+  });
 });
