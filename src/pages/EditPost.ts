@@ -21,6 +21,7 @@ export class EditPostPage extends PostLoginSinglePostViewPage {
   readonly externalLinkInput: Locator;
   readonly topicsInput: Locator;
   readonly selectedTopicChips: Locator;
+  readonly topicChipRemoveBtn: Locator;
 
   // Edit form actions
   readonly updatePostBtn: Locator;
@@ -44,10 +45,10 @@ export class EditPostPage extends PostLoginSinglePostViewPage {
     this.discussionEditor  = page.locator('.ql-editor').first();
     this.externalLinkInput = page.getByRole('textbox', { name: 'External Link' });
     this.topicsInput       = page.getByRole('textbox', { name: 'Topics *' });
-    // Each selected topic renders a chip with a "Remove {topic}" button. Count
-    // and locate topics by that button — it's exactly one per selected topic,
-    // unlike a broad [class*="tag"] match which also hits unrelated elements.
-    this.selectedTopicChips = page.getByRole('button', { name: /^Remove\s+/i });
+    // A selected topic renders as <span class="autocomplete-tag-pill"> with an
+    // × <button class="autocomplete-tag-pill-remove"> inside it.
+    this.selectedTopicChips  = page.locator('.autocomplete-tag-pill');
+    this.topicChipRemoveBtn  = page.locator('.autocomplete-tag-pill-remove');
 
     this.updatePostBtn = page.getByRole('button', { name: /update post/i })
       .or(page.getByRole('button', { name: /^update$|save changes|^save$/i }))
@@ -151,9 +152,10 @@ export class EditPostPage extends PostLoginSinglePostViewPage {
 
   /** Remove a selected topic chip by its visible label. */
   async removeSelectedTopic(topicName: string): Promise<void> {
-    await this.page
-      .getByRole('button', { name: new RegExp(`^Remove\\s+${topicName}`, 'i') })
+    await this.selectedTopicChips
+      .filter({ hasText: topicName })
       .first()
+      .locator('.autocomplete-tag-pill-remove')
       .click();
   }
 
@@ -163,7 +165,11 @@ export class EditPostPage extends PostLoginSinglePostViewPage {
     for (let i = 0; i < 10; i++) {
       const remaining = await this.selectedTopicChips.count();
       if (remaining === 0) break;
-      await this.selectedTopicChips.first().click().catch(() => {});
+      await this.selectedTopicChips
+        .first()
+        .locator('.autocomplete-tag-pill-remove')
+        .click()
+        .catch(() => {});
       await this.page.waitForTimeout(200);
     }
   }

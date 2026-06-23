@@ -87,7 +87,13 @@ test.describe('Edit Post (Post-Login) — Positive Flows', () => {
   test('Step 9 — removing a topic chip deselects it', async () => {
     const before = await editPost.selectedTopicChips.count();
     test.skip(before < 2, 'Post has a single topic — removing it would trip the min-1 rule');
-    await editPost.selectedTopicChips.first().click();
+
+    // Click the × inside the first chip
+    await editPost.selectedTopicChips
+      .first()
+      .locator('.autocomplete-tag-pill-remove')
+      .click();
+
     await expect(editPost.selectedTopicChips).toHaveCount(before - 1);
   });
 
