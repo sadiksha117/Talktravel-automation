@@ -5,7 +5,12 @@ const VALID_EMAIL    = process.env.TEST_EMAIL ?? 'prempoudel72707@gmail.com';
 const VALID_PASSWORD = process.env.TEST_PASSWORD ?? 'Admin@123';
 
 /**
- * Edit Post (Post-Login) — happy-path / step coverage from docs/Editpost.md.
+ * Edit Post (Post-Login) — positive / happy-path coverage from docs/Editpost.md.
+ *
+ * Simple positive flow only: reach the edit form, confirm it is pre-filled,
+ * edit each field, update successfully, cancel cleanly, and see the "Edited"
+ * label. Negative / validation / edge cases live in
+ * tests/exploratory/EditPost.exploratory.spec.ts.
  *
  * Edit Post is owner-only, so these tests log in as the test account and edit
  * one of its own posts. They run serially (shared login + a single owned post
@@ -105,26 +110,6 @@ test.describe('Edit Post (Post-Login) — Positive Flows', () => {
     // Reopen the post and confirm the discarded title never persisted.
     await page.goto(`https://staging.talktravel.com/post/${slug}`, { waitUntil: 'domcontentloaded' });
     await expect(page.getByRole('heading', { level: 1 })).not.toContainText('This change will be discarded');
-  });
-
-  // ── Step 12: Validation — Title required ─────────────────────────────────
-
-  test('Step 12 — clearing the Title blocks Update with a required-field error', async ({ page }) => {
-    await editPost.titleInput.fill('');
-    await editPost.submitUpdate();
-    await expect(page).toHaveURL(/\/edit/, { timeout: 10000 });
-    await expect(page.getByText(/title.*required|required.*title|enter a title/i).first()).toBeVisible();
-  });
-
-  // ── Step 13: Validation — at least one Topic required ────────────────────
-
-  test('Step 13 — removing all topics blocks Update with a topic-required error', async ({ page }) => {
-    await editPost.removeAllTopics();
-    await editPost.submitUpdate();
-    await expect(page).toHaveURL(/\/edit/, { timeout: 10000 });
-    await expect(
-      page.getByText(/topic.*required|at least one topic|select.*topic/i).first()
-    ).toBeVisible();
   });
 
   // ── Step 15: "Edited" label after a successful update ────────────────────
