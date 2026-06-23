@@ -1,9 +1,8 @@
 import { test, expect } from '@playwright/test';
 import { EditPostPage } from '../src/pages/EditPost';
-import path from 'node:path';
 
-// Shared authenticated session, produced by the `setup` project (auth.setup.ts).
-const AUTH_FILE = path.join(__dirname, '..', 'playwright', '.auth', 'owner.json');
+const VALID_EMAIL    = process.env.TEST_EMAIL ?? 'prempoudel72707@gmail.com';
+const VALID_PASSWORD = process.env.TEST_PASSWORD ?? 'Admin@123';
 
 /**
  * Edit Post (Post-Login) — positive / happy-path coverage from docs/Editpost.md.
@@ -13,22 +12,22 @@ const AUTH_FILE = path.join(__dirname, '..', 'playwright', '.auth', 'owner.json'
  * label. Negative / validation / edge cases live in
  * tests/exploratory/EditPost.exploratory.spec.ts.
  *
- * Edit Post is owner-only. Auth happens ONCE in the `setup` project, which
- * saves storageState to playwright/.auth/owner.json; this file reuses it.
- * Logging in per test races on the single shared account (staging keeps one
- * session per account), which logged later tests out.
+ * Edit Post is owner-only, so these tests log in as the test account and edit
+ * one of its own posts. They run serially (shared login + a single owned post
+ * is edited repeatedly) to avoid parallel workers fighting over the same post.
  */
 test.describe('Edit Post (Post-Login) — Positive Flows', () => {
+  // Each test logs in and opens the edit form independently in beforeEach, so
+  // they don't depend on each other — run them in default (non-serial) mode so
+  // one failure doesn't skip the rest. Run with `--workers=1` to avoid two
+  // tests editing the same post at once.
   test.setTimeout(120000);
-
-  // Reuse the session created by the setup project — no per-test login.
-  test.use({ storageState: AUTH_FILE });
 
   let editPost: EditPostPage;
 
   test.beforeEach(async ({ page }) => {
     editPost = new EditPostPage(page);
-    // Already authenticated via storageState — go straight to the edit form.
+    await editPost.login(VALID_EMAIL, VALID_PASSWORD);
     await editPost.openOwnPostEdit();
   });
 

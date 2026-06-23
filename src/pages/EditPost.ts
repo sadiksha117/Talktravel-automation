@@ -90,51 +90,36 @@ export class EditPostPage extends PostLoginSinglePostViewPage {
    * (e.g. the current user is not the author).
    */
   async openEditFromSinglePost(): Promise<boolean> {
-    // The post header 3-dot button is labelled "Post options". Wait for it to be
-    // actually present before clicking — under parallel load it mounts late.
+    // The post header 3-dot button is labelled "Post options".
     const moreBtn = this.page.getByRole('button', { name: /post options/i }).first();
-    if (!(await moreBtn.isVisible({ timeout: 15000 }).catch(() => false))) {
-      return false;
-    }
-    await moreBtn.click();
-    if (!(await this.menuEditPost.isVisible({ timeout: 8000 }).catch(() => false))) {
+    await moreBtn.click({ timeout: 10000 }).catch(() => {});
+    if (!(await this.menuEditPost.isVisible({ timeout: 5000 }).catch(() => false))) {
       return false;
     }
     await this.menuEditPost.click();
-    return await this.titleInput.isVisible({ timeout: 20000 }).catch(() => false);
+    await this.titleInput.waitFor({ state: 'visible', timeout: 15000 }).catch(() => {});
+    return true;
   }
 
   /**
-   * Entry point used by most tests: open one of the author's *own* posts (via
-   * My Posts, which only lists the current user's posts) and land on its edit
-   * form. Tries the 3-dot "Edit" menu first (this is the real entry the doc
-   * describes); if that doesn't resolve under load, falls back to navigating
-   * directly to the post's /edit URL, which the owner is allowed to open.
+   * Entry point used by most tests: log in, open one of the author's *own*
+   * posts (via My Posts, which only lists the current user's posts), and land
+   * on its edit form. Going through My Posts guarantees ownership — the
+   * trending feed surfaces other users' posts, which have no Edit option.
    */
   async openOwnPostEdit(): Promise<void> {
     await this.goToMyPosts();
     const firstOwnPost = this.page.locator('a[href^="/post/"]').first();
-    await firstOwnPost.waitFor({ state: 'visible', timeout: 20000 });
+    await firstOwnPost.waitFor({ state: 'visible', timeout: 15000 });
     await firstOwnPost.click();
     await this.page.waitForURL('**/post/**', { timeout: 30000 });
-    await this.page.waitForLoadState('networkidle', { timeout: 15000 }).catch(() => {});
-
-    // Preferred path: the 3-dot menu → Edit.
-    if (await this.openEditFromSinglePost()) return;
-
-    // Fallback: go straight to the edit URL of the post we're already viewing.
-    const slug = this.currentPostSlug();
-    if (slug) {
-      await this.gotoEdit(slug);
-      if (await this.titleInput.isVisible({ timeout: 15000 }).catch(() => false)) return;
+    const opened = await this.openEditFromSinglePost();
+    if (!opened) {
+      throw new Error(
+        'No "Edit" option on the first My Posts entry — confirm the test account ' +
+        'has at least one published post it owns.'
+      );
     }
-
-    throw new Error(
-      'Could not reach the Edit Post form — neither the "Post options → Edit" ' +
-      'menu nor direct navigation to /post/' + (slug || '{slug}') + '/edit showed ' +
-      'the edit form. Confirm the test account owns the first My Posts entry and ' +
-      'that the edit URL pattern is /post/{slug}/edit.'
-    );
   }
 
   /** Open the author's My Posts list (left nav). */
