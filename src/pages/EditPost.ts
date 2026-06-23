@@ -1,0 +1,168 @@
+import { type Page, type Locator } from '@playwright/test';
+import { PostLoginSinglePostViewPage } from './PostLoginSinglePostView';
+
+/**
+ * Page object for the Edit Post (Post-Login) flow.
+ *
+ * Edit Post is owner-only and the form is structurally identical to Create Post,
+ * just pre-filled with the post's current values. This object therefore reuses
+ * the *confirmed* real-site form locators (role-based Title / External Link /
+ * Topics inputs and the Quill `.ql-editor` discussion body) rather than the
+ * speculative `data-testid` selectors in docs/Editpost.md, which the doc itself
+ * flags as unconfirmed.
+ *
+ * Navigation (login, opening a post, cookie banner) is reused from
+ * PostLoginSinglePostViewPage.
+ */
+export class EditPostPage extends PostLoginSinglePostViewPage {
+  // Edit form fields (same controls as Create Post, pre-filled)
+  readonly titleInput: Locator;
+  readonly discussionEditor: Locator;
+  readonly externalLinkInput: Locator;
+  readonly topicsInput: Locator;
+  readonly selectedTopicChips: Locator;
+
+  // Edit form actions
+  readonly updatePostBtn: Locator;
+  readonly cancelBtn: Locator;
+  readonly fetchTitleBtn: Locator;
+
+  // 3-dot menu item that opens the edit form ("Edit Post" on feed/single view,
+  // "Edit" in the My Posts list)
+  readonly menuEditPost: Locator;
+
+  // "Edited" label/timestamp shown on the Single Post View after a successful update
+  readonly editedLabel: Locator;
+
+  // Left-nav "My Posts" entry point
+  readonly myPostsLink: Locator;
+
+  constructor(page: Page) {
+    super(page);
+
+    this.titleInput        = page.getByRole('textbox', { name: 'Title *' });
+    this.discussionEditor  = page.locator('.ql-editor').first();
+    this.externalLinkInput = page.getByRole('textbox', { name: 'External Link' });
+    this.topicsInput       = page.getByRole('textbox', { name: 'Topics *' });
+    this.selectedTopicChips = page.locator(
+      '[data-testid="topic-chip-selected"], [class*="chip"], [class*="tag"], [class*="badge"], [class*="selected-topic"]'
+    );
+
+    this.updatePostBtn = page.getByRole('button', { name: /update post/i })
+      .or(page.getByRole('button', { name: /^update$|save changes|^save$/i }))
+      .first();
+    this.cancelBtn = page.getByRole('button', { name: /^cancel$/i }).first();
+    this.fetchTitleBtn = page.getByRole('button', { name: /fetch title/i }).first();
+
+    this.menuEditPost = page.locator('[role="menuitem"]:has-text("Edit")')
+      .or(page.getByRole('menuitem', { name: /^edit( post)?$/i }))
+      .or(page.getByText(/^edit( post)?$/i))
+      .first();
+
+    this.editedLabel = page.locator('[data-testid="edited-label"]')
+      .or(page.getByText(/edited/i))
+      .first();
+
+    this.myPostsLink = page.getByRole('link', { name: /my posts/i }).first();
+  }
+
+  /** Returns the slug segment of the current /post/{slug}[/edit] URL. */
+  currentPostSlug(): string {
+    const match = this.page.url().match(/\/post\/([^/?#]+)/);
+    return match ? match[1] : '';
+  }
+
+  /** True when the browser is on an Edit Post form URL (e.g. /post/{slug}/edit). */
+  isOnEditUrl(): boolean {
+    return /\/post\/[^/?#]+\/edit/.test(this.page.url()) || /\/edit-post\//.test(this.page.url());
+  }
+
+  /** Navigate directly to a post's edit form by slug. */
+  async gotoEdit(slug: string): Promise<void> {
+    await this.page.goto(`https://staging.talktravel.com/post/${slug}/edit`, {
+      waitUntil: 'domcontentloaded',
+    });
+  }
+
+  /**
+   * Open the 3-dot menu on the current Single Post View and click the Edit item.
+   * Returns true if the edit form was reached, false if no Edit option exists
+   * (e.g. the current user is not the author).
+   */
+  async openEditFromSinglePost(): Promise<boolean> {
+    await this.postMoreBtn.click({ timeout: 10000 }).catch(() => {});
+    if (!(await this.menuEditPost.isVisible({ timeout: 5000 }).catch(() => false))) {
+      return false;
+    }
+    await this.menuEditPost.click();
+    await this.titleInput.waitFor({ state: 'visible', timeout: 15000 }).catch(() => {});
+    return true;
+  }
+
+  /**
+   * Entry point used by most tests: log in, open one of the author's own posts,
+   * and land on its edit form. Throws if no owned post with an Edit option is
+   * found, so the failure message is explicit rather than a silent timeout.
+   */
+  async openOwnPostEdit(): Promise<void> {
+    await this.openFirstPost();
+    const opened = await this.openEditFromSinglePost();
+    if (!opened) {
+      throw new Error(
+        'No "Edit" option on the opened post — the trending feed surfaced a post ' +
+        'not authored by the test account. Seed/own a post or use My Posts as the entry point.'
+      );
+    }
+  }
+
+  /** Open the author's My Posts list (left nav). */
+  async goToMyPosts(): Promise<void> {
+    if (await this.myPostsLink.isVisible({ timeout: 5000 }).catch(() => false)) {
+      await this.myPostsLink.click();
+    } else {
+      await this.page.goto('https://staging.talktravel.com/my-posts', { waitUntil: 'domcontentloaded' });
+    }
+    await this.page.waitForLoadState('load').catch(() => {});
+  }
+
+  /** Select a topic from the async/debounced Topics dropdown (same as Create Post). */
+  async selectTopic(topicName: string): Promise<void> {
+    await this.topicsInput.fill(topicName);
+    const option = this.page
+      .getByRole('listbox')
+      .getByText(topicName, { exact: true })
+      .filter({ hasNotText: 'Create new topic' });
+    await option.first().waitFor({ state: 'visible', timeout: 15000 });
+    await option.first().click();
+  }
+
+  /** Remove a selected topic chip by its visible label. */
+  async removeSelectedTopic(topicName: string): Promise<void> {
+    const chip = this.selectedTopicChips.filter({ hasText: topicName }).first();
+    await chip
+      .locator('button, [aria-label="Remove"], [class*="remove"], [class*="close"], [class*="delete"]')
+      .first()
+      .click();
+  }
+
+  /** Remove every currently-selected topic chip. */
+  async removeAllTopics(): Promise<void> {
+    // Re-query after each removal since the list shrinks.
+    for (let i = 0; i < 10; i++) {
+      const remaining = await this.selectedTopicChips.count();
+      if (remaining === 0) break;
+      const chip = this.selectedTopicChips.first();
+      await chip
+        .locator('button, [aria-label="Remove"], [class*="remove"], [class*="close"], [class*="delete"]')
+        .first()
+        .click()
+        .catch(() => {});
+      await this.page.waitForTimeout(200);
+    }
+  }
+
+  /** Submit the edit form. */
+  async submitUpdate(): Promise<void> {
+    await this.updatePostBtn.click({ force: true });
+  }
+}
