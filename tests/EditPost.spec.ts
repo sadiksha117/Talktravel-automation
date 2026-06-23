@@ -1,8 +1,14 @@
 import { test, expect } from '@playwright/test';
 import { EditPostPage } from '../src/pages/EditPost';
+import fs from 'node:fs';
+import path from 'node:path';
 
 const VALID_EMAIL    = process.env.TEST_EMAIL ?? 'prempoudel72707@gmail.com';
 const VALID_PASSWORD = process.env.TEST_PASSWORD ?? 'Admin@123';
+
+// Shared authenticated session for the whole file.
+const AUTH_DIR  = path.join(__dirname, '..', 'playwright', '.auth');
+const AUTH_FILE = path.join(AUTH_DIR, 'owner.json');
 
 /**
  * Edit Post (Post-Login) — positive / happy-path coverage from docs/Editpost.md.
@@ -12,22 +18,30 @@ const VALID_PASSWORD = process.env.TEST_PASSWORD ?? 'Admin@123';
  * label. Negative / validation / edge cases live in
  * tests/exploratory/EditPost.exploratory.spec.ts.
  *
- * Edit Post is owner-only, so these tests log in as the test account and edit
- * one of its own posts. They run serially (shared login + a single owned post
- * is edited repeatedly) to avoid parallel workers fighting over the same post.
+ * Edit Post is owner-only. We authenticate ONCE in beforeAll and reuse the
+ * saved storageState — logging in per test races on the single shared account
+ * (staging keeps one session per account), which logged later tests out.
  */
 test.describe('Edit Post (Post-Login) — Positive Flows', () => {
-  // Each test logs in and opens the edit form independently in beforeEach, so
-  // they don't depend on each other — run them in default (non-serial) mode so
-  // one failure doesn't skip the rest. Run with `--workers=1` to avoid two
-  // tests editing the same post at once.
   test.setTimeout(120000);
+
+  // Log in once and persist the session; every test reuses it (no re-login).
+  test.beforeAll(async ({ browser }) => {
+    fs.mkdirSync(AUTH_DIR, { recursive: true });
+    const page = await browser.newPage();
+    const auth = new EditPostPage(page);
+    await auth.login(VALID_EMAIL, VALID_PASSWORD);
+    await page.context().storageState({ path: AUTH_FILE });
+    await page.close();
+  });
+
+  test.use({ storageState: AUTH_FILE });
 
   let editPost: EditPostPage;
 
   test.beforeEach(async ({ page }) => {
     editPost = new EditPostPage(page);
-    await editPost.login(VALID_EMAIL, VALID_PASSWORD);
+    // Already authenticated via storageState — go straight to the edit form.
     await editPost.openOwnPostEdit();
   });
 
