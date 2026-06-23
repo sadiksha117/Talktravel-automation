@@ -87,11 +87,7 @@ test.describe('Edit Post (Post-Login) — Positive Flows', () => {
   test('Step 9 — removing a topic chip deselects it', async () => {
     const before = await editPost.selectedTopicChips.count();
     test.skip(before < 2, 'Post has a single topic — removing it would trip the min-1 rule');
-    await editPost.selectedTopicChips
-      .first()
-      .locator('button, [aria-label="Remove"], [class*="remove"], [class*="close"]')
-      .first()
-      .click();
+    await editPost.selectedTopicChips.first().click();
     await expect(editPost.selectedTopicChips).toHaveCount(before - 1);
   });
 

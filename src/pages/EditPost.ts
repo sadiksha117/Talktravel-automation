@@ -44,9 +44,10 @@ export class EditPostPage extends PostLoginSinglePostViewPage {
     this.discussionEditor  = page.locator('.ql-editor').first();
     this.externalLinkInput = page.getByRole('textbox', { name: 'External Link' });
     this.topicsInput       = page.getByRole('textbox', { name: 'Topics *' });
-    this.selectedTopicChips = page.locator(
-      '[data-testid="topic-chip-selected"], [class*="chip"], [class*="tag"], [class*="badge"], [class*="selected-topic"]'
-    );
+    // Each selected topic renders a chip with a "Remove {topic}" button. Count
+    // and locate topics by that button — it's exactly one per selected topic,
+    // unlike a broad [class*="tag"] match which also hits unrelated elements.
+    this.selectedTopicChips = page.getByRole('button', { name: /^Remove\s+/i });
 
     this.updatePostBtn = page.getByRole('button', { name: /update post/i })
       .or(page.getByRole('button', { name: /^update$|save changes|^save$/i }))
@@ -150,9 +151,8 @@ export class EditPostPage extends PostLoginSinglePostViewPage {
 
   /** Remove a selected topic chip by its visible label. */
   async removeSelectedTopic(topicName: string): Promise<void> {
-    const chip = this.selectedTopicChips.filter({ hasText: topicName }).first();
-    await chip
-      .locator('button, [aria-label="Remove"], [class*="remove"], [class*="close"], [class*="delete"]')
+    await this.page
+      .getByRole('button', { name: new RegExp(`^Remove\\s+${topicName}`, 'i') })
       .first()
       .click();
   }
@@ -163,12 +163,7 @@ export class EditPostPage extends PostLoginSinglePostViewPage {
     for (let i = 0; i < 10; i++) {
       const remaining = await this.selectedTopicChips.count();
       if (remaining === 0) break;
-      const chip = this.selectedTopicChips.first();
-      await chip
-        .locator('button, [aria-label="Remove"], [class*="remove"], [class*="close"], [class*="delete"]')
-        .first()
-        .click()
-        .catch(() => {});
+      await this.selectedTopicChips.first().click().catch(() => {});
       await this.page.waitForTimeout(200);
     }
   }
