@@ -18,17 +18,26 @@ export default defineConfig({
     video: 'on-first-retry',
   },
   projects: [
+    // Auth setup — logs in once and saves storageState for owner-only specs
+    // (e.g. Edit Post). Runs before the browser projects via `dependencies`.
+    {
+      name: 'setup',
+      testMatch: /.*\.setup\.ts/,
+    },
     {
       name: 'chromium',
       use: { ...devices['Desktop Chrome'] },
+      dependencies: ['setup'],
     },
     {
       name: 'firefox',
       use: { ...devices['Desktop Firefox'] },
+      dependencies: ['setup'],
     },
     {
       name: 'webkit',
       use: { ...devices['Desktop Safari'] },
+      dependencies: ['setup'],
     },
   ],
 });
