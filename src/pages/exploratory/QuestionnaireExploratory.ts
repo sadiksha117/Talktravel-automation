@@ -30,11 +30,18 @@ export class QuestionnaireExploratoryPage extends QuestionnairePage {
     );
     await createAccount.submitForm();
 
-    await this.page.waitForLoadState('load');
+    // Wait for registration to leave /register (mirrors the positive spec).
+    // Tolerate timeout so we can still attempt the questionnaire route below.
+    await this.page
+      .waitForURL(url => !/\/register/.test(url.toString()), { timeout: 20000 })
+      .catch(() => {});
 
     if (!this.page.url().includes('/questionnaire')) {
-      await this.page.goto('https://staging.talktravel.com/questionnaire');
-      await this.page.waitForLoadState('networkidle');
+      // Use domcontentloaded (NOT networkidle — a live site never goes idle)
+      // and tolerate ERR_ABORTED from an immediate client-side redirect.
+      await this.page
+        .goto('https://staging.talktravel.com/questionnaire', { waitUntil: 'domcontentloaded' })
+        .catch(() => {});
     }
   }
 }
