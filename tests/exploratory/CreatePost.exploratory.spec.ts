@@ -6,11 +6,10 @@ const VALID_PASSWORD = process.env.TEST_PASSWORD ?? 'Admin@123';
 const BASE_URL = 'https://staging.talktravel.com';
 
 test.describe('Create Post — Exploratory (Negative, Edge, Security, Accessibility)', () => {
-  test.describe.configure({ mode: 'serial', timeout: 90000 });
-
   let createPost: CreatePostExploratoryPage;
 
   test.beforeEach(async ({ page }) => {
+    test.slow(); // triples the default timeout — gives each test ~90s for login + action
     createPost = new CreatePostExploratoryPage(page);
     await createPost.loginAndNavigateToCreatePost(VALID_EMAIL, VALID_PASSWORD);
     await createPost.dismissCookieBanner();
