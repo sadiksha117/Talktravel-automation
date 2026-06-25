@@ -3,6 +3,16 @@ import { QuestionnaireExploratoryPage } from '../../src/pages/exploratory/Questi
 
 const BASE_URL = 'https://staging.talktravel.com';
 
+// First-party infra endpoints that are NOT profile saves (WebSocket
+// transport, telemetry, auth refresh). Excluded from "did it save?" checks.
+const INFRA_ENDPOINT = /socket\.io|\/ws\b|websocket|analytics|telemetry|sentry|log|metric|heartbeat|token\/refresh/i;
+
+function isProfileWrite(method: string, url: string): boolean {
+  return ['POST', 'PUT', 'PATCH'].includes(method)
+    && url.includes('talktravel.com')
+    && !INFRA_ENDPOINT.test(url);
+}
+
 test.describe('Travel Profile / Questionnaire (Onboarding) — Exploratory Edge & Negative Cases', () => {
   let questionnaire: QuestionnaireExploratoryPage;
 
@@ -167,12 +177,12 @@ test.describe('Travel Profile / Questionnaire (Onboarding) — Exploratory Edge 
   });
 
   test('Edge — rapid double-click on Continue with empty form does not double-submit or navigate twice', { tag: '@exploratory' }, async ({ page }) => {
-    // Track only first-party (talktravel) write requests, keyed by path —
-    // third-party analytics/telemetry beacons are not a double-submit.
+    // Track only first-party profile-write requests, keyed by path — analytics
+    // beacons and WebSocket/socket.io transport are not a double-submit.
     const mutations: string[] = [];
     page.on('request', req => {
       const url = req.url();
-      if (['POST', 'PUT', 'PATCH'].includes(req.method()) && url.includes('talktravel.com')) {
+      if (isProfileWrite(req.method(), url)) {
         mutations.push(url.split('?')[0]);
       }
     });
@@ -300,20 +310,18 @@ test.describe('Travel Profile / Questionnaire (Onboarding) — Exploratory Edge 
 
   test('Edge — verification banner is reachable as an interactive element, not decorative', { tag: '@exploratory' }, async () => {
     const banner = questionnaire.verifyBanner;
-    const tagName = await banner.evaluate(el => el.tagName.toLowerCase());
-    const role = await banner.getAttribute('role');
-    const tabindex = await banner.getAttribute('tabindex');
-    const hasClickAffordance = await banner.evaluate(el => {
-      const cursor = getComputedStyle(el).cursor;
-      const hasHandler = typeof (el as HTMLElement).onclick === 'function' || el.hasAttribute('onclick');
-      return cursor === 'pointer' || hasHandler;
+    // The banner is a clickable region (the positive suite clicks it to reach
+    // /verify-account). React delegates clicks at the root, so el.onclick is
+    // null — instead check the element, an ancestor, or a descendant is
+    // interactive, or that it presents a pointer cursor.
+    const isInteractive = await banner.evaluate(el => {
+      const interactiveSel = 'a, button, [role="link"], [role="button"], [tabindex]:not([tabindex="-1"])';
+      const self = el.matches(interactiveSel);
+      const ancestor = !!el.closest(interactiveSel);
+      const descendant = !!el.querySelector('a, button');
+      const pointer = getComputedStyle(el).cursor === 'pointer';
+      return self || ancestor || descendant || pointer;
     });
-    const isInteractive =
-      ['a', 'button'].includes(tagName) ||
-      ['link', 'button'].includes(role ?? '') ||
-      (await banner.locator('a, button').count()) > 0 ||
-      (tabindex !== null && tabindex !== '-1') ||
-      hasClickAffordance;
     expect(isInteractive, 'Verify banner appears decorative — no semantic role, tabindex, or click affordance').toBe(true);
   });
 
@@ -330,12 +338,12 @@ test.describe('Travel Profile / Questionnaire (Onboarding) — Exploratory Edge 
   });
 
   test('Edge — Skip for now does not fire a profile write/mutation request', { tag: '@exploratory' }, async ({ page }) => {
-    // Only first-party (talktravel) writes matter — third-party analytics
-    // beacons are not a profile save.
+    // Only first-party profile writes matter — analytics beacons and
+    // socket.io/WebSocket transport are not a profile save.
     const mutations: string[] = [];
     page.on('request', req => {
       const url = req.url();
-      if (['POST', 'PUT', 'PATCH'].includes(req.method()) && url.includes('talktravel.com')) {
+      if (isProfileWrite(req.method(), url)) {
         mutations.push(url.split('?')[0]);
       }
     });
