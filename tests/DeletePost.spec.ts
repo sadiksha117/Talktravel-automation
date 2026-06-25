@@ -44,8 +44,18 @@ test.describe('Delete Post (Post-Login) — Positive Flows', () => {
 
   // Seed a throwaway post on the /create-post page and return its slug.
   async function seedPost(page: import('@playwright/test').Page, title: string): Promise<string> {
-    await page.goto('https://staging.talktravel.com/create-post', { waitUntil: 'domcontentloaded' });
-    await createPost.titleInput.waitFor({ state: 'visible', timeout: 30000 });
+    // Staging can return ERR_ABORTED or be slow to render the form right after
+    // login — retry the navigation a few times (same pattern as the page objects).
+    for (let attempt = 1; attempt <= 3; attempt++) {
+      try {
+        await page.goto('https://staging.talktravel.com/create-post', { waitUntil: 'domcontentloaded' });
+        await createPost.titleInput.waitFor({ state: 'visible', timeout: 20000 });
+        break;
+      } catch (err) {
+        if (attempt === 3) throw err;
+        await page.waitForTimeout(attempt * 2000);
+      }
+    }
     await createPost.titleInput.fill(title);
     await addFreshTopic(page, `qa-${Date.now()}`);
     await deletePost.dismissCookieBanner();
