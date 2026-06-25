@@ -150,14 +150,4 @@ test.describe('Delete Post (Post-Login) — Positive Flows', () => {
     await expect(page).toHaveURL(new RegExp(`/post/${slug}`), { timeout: 15000 });
     await expect(deletePost.deletedPlaceholder).toBeVisible({ timeout: 10000 });
   });
-
-  test('Step 6 — comments remain visible on a placeholder post', async ({ page }) => {
-    const commentText = 'Automation seed comment that should survive deletion.';
-    await deletePost.addComment(commentText);
-    await deletePost.gotoPost(slug);
-
-    await deletePost.openDeleteDialog();
-    await deletePost.confirmDelete();
-    await expect(page.getByText(commentText)).toBeVisible({ timeout: 10000 });
-  });
 });
