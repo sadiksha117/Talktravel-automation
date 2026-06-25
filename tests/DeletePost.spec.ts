@@ -27,12 +27,28 @@ test.describe('Delete Post (Post-Login) — Positive Flows', () => {
   let deletePost: DeletePostPage;
   let slug: string;
 
-  // Publish the create form that loginAndGoToCreatePost has already opened, then
-  // return the new post's slug from the resulting Single Post View URL.
-  async function publishSeedPost(page: import('@playwright/test').Page, title: string): Promise<string> {
+  // Add a topic by creating a fresh, uniquely-named one through the "Create new
+  // topic" dialog. Existing topic names on staging are not stable (e.g. "Hilton"
+  // no longer exists), so seeding its own topic keeps the create form valid
+  // without depending on what topics happen to exist.
+  async function addFreshTopic(page: import('@playwright/test').Page, name: string): Promise<void> {
+    await createPost.topicsInput.fill(name);
+    const listbox = page.getByRole('listbox');
+    const createBtn = listbox.getByRole('button', { name: /create new topic/i }).first();
+    await createBtn.waitFor({ state: 'visible', timeout: 15000 });
+    await createBtn.click();
+    const dialog = page.getByRole('dialog').filter({ hasText: /create new topic/i }).first();
+    await dialog.getByRole('button', { name: /^create topic$/i }).click();
+    await dialog.waitFor({ state: 'hidden', timeout: 10000 }).catch(() => {});
+  }
+
+  // Seed a throwaway post on the /create-post page and return its slug.
+  async function seedPost(page: import('@playwright/test').Page, title: string): Promise<string> {
+    await page.goto('https://staging.talktravel.com/create-post', { waitUntil: 'domcontentloaded' });
+    await createPost.titleInput.waitFor({ state: 'visible', timeout: 30000 });
     await createPost.titleInput.fill(title);
-    await createPost.selectTopic('Hilton');
-    await createPost.dismissCookieBanner();
+    await addFreshTopic(page, `qa-${Date.now()}`);
+    await deletePost.dismissCookieBanner();
     await createPost.publishBtn.click({ force: true });
     await expect(page).toHaveURL(/\/post\/[a-z0-9-]+/, { timeout: 20000 });
     await page.waitForLoadState('load').catch(() => {});
@@ -42,9 +58,10 @@ test.describe('Delete Post (Post-Login) — Positive Flows', () => {
   test.beforeEach(async ({ page }) => {
     createPost = new CreatePostPage(page);
     deletePost = new DeletePostPage(page);
-    await createPost.loginAndGoToCreatePost(VALID_EMAIL, VALID_PASSWORD);
-    await createPost.dismissCookieBanner();
-    slug = await publishSeedPost(page, `Delete flow ${Date.now()}`);
+    // Use the robust /login flow (same as EditPost) rather than the homepage
+    // "Log in" link, which is flaky under repeated runs.
+    await deletePost.login(VALID_EMAIL, VALID_PASSWORD);
+    slug = await seedPost(page, `Delete flow ${Date.now()}`);
   });
 
   // ── Steps 1–3: Reaching the delete confirmation ──────────────────────────
