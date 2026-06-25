@@ -5,28 +5,19 @@ import { PostLoginSinglePostViewPage } from './PostLoginSinglePostView';
  * Page object for the Delete Post (Post-Login) flow.
  *
  * Delete Post is owner-only and irreversible, so the positive-flow tests never
- * touch pre-existing data: each test seeds a throwaway post through the real
- * Create Post UI and then deletes that. Two outcomes are exercised — a post
- * WITHOUT comments is removed permanently (URL → 404), a post WITH comments is
- * replaced by a "Deleted by author" placeholder (URL still resolves, comments
+ * touch pre-existing data: each test seeds a throwaway post (via the proven
+ * CreatePostPage flow) and then deletes that. Two outcomes are exercised — a
+ * post WITHOUT comments is removed permanently (URL → 404), a post WITH comments
+ * is replaced by a "Deleted by author" placeholder (URL still resolves, comments
  * stay visible).
  *
- * Like EditPostPage, this reuses the *confirmed* real-site locators (role-based
- * Title / Topics inputs, the Quill `.ql-editor` body, the "Post options" 3-dot
- * button) rather than the speculative `data-testid` selectors in
- * docs/DeletePost.md, which the doc itself flags as unconfirmed.
- *
- * Navigation (login, cookie banner, comments) is inherited from
+ * Like EditPostPage, this reuses the *confirmed* real-site locators (the "Post
+ * options" 3-dot button, role="dialog" confirmation) rather than the speculative
+ * `data-testid` selectors in docs/DeletePost.md, which the doc itself flags as
+ * unconfirmed. Login, cookie banner and commenting are inherited from
  * PostLoginSinglePostViewPage.
  */
 export class DeletePostPage extends PostLoginSinglePostViewPage {
-  // Create Post form (used only to seed a disposable post to delete)
-  readonly createPostLink: Locator;
-  readonly titleInput: Locator;
-  readonly discussionEditor: Locator;
-  readonly topicsInput: Locator;
-  readonly publishBtn: Locator;
-
   // 3-dot menu item that opens the delete confirmation ("Delete Post" on the
   // feed / single view, "Delete" in the My Posts list)
   readonly menuDeletePost: Locator;
@@ -44,14 +35,6 @@ export class DeletePostPage extends PostLoginSinglePostViewPage {
 
   constructor(page: Page) {
     super(page);
-
-    this.createPostLink = page.getByRole('link', { name: 'TalkTravel Create Post' })
-      .or(page.getByRole('link', { name: /create post/i }))
-      .first();
-    this.titleInput       = page.getByRole('textbox', { name: 'Title *' });
-    this.discussionEditor = page.locator('.ql-editor').first();
-    this.topicsInput      = page.getByRole('textbox', { name: 'Topics *' });
-    this.publishBtn       = page.getByRole('button', { name: 'Publish Post' });
 
     this.menuDeletePost = page.locator('[role="menuitem"]:has-text("Delete")')
       .or(page.getByRole('menuitem', { name: /^delete( post)?$/i }))
@@ -74,7 +57,7 @@ export class DeletePostPage extends PostLoginSinglePostViewPage {
     this.notFoundState = page.getByText(/not found|404|no longer (exists|available)/i).first();
   }
 
-  /** Returns the slug segment of the current /post/{slug}[/edit] URL. */
+  /** Returns the slug segment of the current /post/{slug} URL. */
   currentPostSlug(): string {
     const match = this.page.url().match(/\/post\/([^/?#]+)/);
     return match ? match[1] : '';
@@ -86,55 +69,11 @@ export class DeletePostPage extends PostLoginSinglePostViewPage {
     return /\/post\/[^/?#]+/.test(this.page.url());
   }
 
-  /**
-   * Seed a throwaway post through the Create Post UI and land on its Single Post
-   * View. Returns the new post's slug. `withComment`, when true, also leaves one
-   * comment on the post so the placeholder branch can be exercised.
-   */
-  async createDisposablePost(
-    title: string,
-    opts: { body?: string; topic?: string; withComment?: string } = {},
-  ): Promise<string> {
-    const { body, topic = 'Hilton', withComment } = opts;
-
-    await this.dismissCookieBanner();
-    await this.createPostLink.waitFor({ state: 'visible', timeout: 60000 });
-    await this.createPostLink.click();
-    await this.titleInput.waitFor({ state: 'visible', timeout: 15000 });
-
-    await this.titleInput.fill(title);
-    if (body) {
-      await this.discussionEditor.click();
-      await this.discussionEditor.fill(body);
-    }
-    await this.selectTopicByName(topic);
-    await this.dismissCookieBanner();
-    await this.publishBtn.click({ force: true });
-
-    await this.page.waitForURL(/\/post\/[a-z0-9-]+/, { timeout: 20000 });
-    await this.page.waitForLoadState('load').catch(() => {});
-    const slug = this.currentPostSlug();
-
-    if (withComment) {
-      await this.addComment(withComment);
-      // Re-open the post cleanly so the page isn't mid-comment-submit when the
-      // delete flow starts.
-      await this.page.goto(`https://staging.talktravel.com/post/${slug}`, {
-        waitUntil: 'domcontentloaded',
-      });
-    }
-    return slug;
-  }
-
-  /** Select a topic from the async/debounced Topics dropdown (same as Create Post). */
-  async selectTopicByName(topicName: string): Promise<void> {
-    await this.topicsInput.fill(topicName);
-    const option = this.page
-      .getByRole('listbox')
-      .getByText(topicName, { exact: true })
-      .filter({ hasNotText: 'Create new topic' });
-    await option.first().waitFor({ state: 'visible', timeout: 15000 });
-    await option.first().click();
+  /** Open a post's Single Post View directly by slug. */
+  async gotoPost(slug: string): Promise<void> {
+    await this.page.goto(`https://staging.talktravel.com/post/${slug}`, {
+      waitUntil: 'domcontentloaded',
+    });
   }
 
   /**

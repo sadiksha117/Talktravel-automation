@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { CreatePostPage } from '../src/pages/CreatePost';
 import { DeletePostPage } from '../src/pages/DeletePost';
 
 const VALID_EMAIL    = process.env.TEST_EMAIL ?? 'prempoudel72707@gmail.com';
@@ -15,22 +16,35 @@ const VALID_PASSWORD = process.env.TEST_PASSWORD ?? 'Admin@123';
  * cases live outside this file.
  *
  * Delete is owner-only and irreversible, so each test seeds its OWN throwaway
- * post via the Create Post UI in beforeEach and deletes that — no pre-existing
- * data is ever touched. They run independently; use `--workers=1` so parallel
- * workers don't fight over the shared login.
+ * post in beforeEach — reusing the proven CreatePostPage flow from
+ * CreatePost.spec.ts — and deletes that. No pre-existing data is touched. Run
+ * with `--workers=1` so parallel workers don't fight over the shared login.
  */
 test.describe('Delete Post (Post-Login) — Positive Flows', () => {
   test.setTimeout(120000);
 
+  let createPost: CreatePostPage;
   let deletePost: DeletePostPage;
   let slug: string;
 
+  // Publish the create form that loginAndGoToCreatePost has already opened, then
+  // return the new post's slug from the resulting Single Post View URL.
+  async function publishSeedPost(page: import('@playwright/test').Page, title: string): Promise<string> {
+    await createPost.titleInput.fill(title);
+    await createPost.selectTopic('Hilton');
+    await createPost.dismissCookieBanner();
+    await createPost.publishBtn.click({ force: true });
+    await expect(page).toHaveURL(/\/post\/[a-z0-9-]+/, { timeout: 20000 });
+    await page.waitForLoadState('load').catch(() => {});
+    return deletePost.currentPostSlug();
+  }
+
   test.beforeEach(async ({ page }) => {
+    createPost = new CreatePostPage(page);
     deletePost = new DeletePostPage(page);
-    await deletePost.login(VALID_EMAIL, VALID_PASSWORD);
-    slug = await deletePost.createDisposablePost(`Delete flow ${Date.now()}`, {
-      body: 'Disposable post seeded by automation for the delete flow.',
-    });
+    await createPost.loginAndGoToCreatePost(VALID_EMAIL, VALID_PASSWORD);
+    await createPost.dismissCookieBanner();
+    slug = await publishSeedPost(page, `Delete flow ${Date.now()}`);
   });
 
   // ── Steps 1–3: Reaching the delete confirmation ──────────────────────────
@@ -75,7 +89,7 @@ test.describe('Delete Post (Post-Login) — Positive Flows', () => {
     await deletePost.openDeleteDialog();
     await deletePost.cancelDelete();
     // Reopen the post and confirm it still resolves with its heading intact.
-    await page.goto(`https://staging.talktravel.com/post/${slug}`, { waitUntil: 'domcontentloaded' });
+    await deletePost.gotoPost(slug);
     await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
   });
 
@@ -88,34 +102,33 @@ test.describe('Delete Post (Post-Login) — Positive Flows', () => {
     await expect(page).not.toHaveURL(new RegExp(`/post/${slug}(?:[/?#]|$)`), { timeout: 15000 });
   });
 
-  test('Step 7 — a permanently deleted post URL shows a not-found state', async ({ page }) => {
+  test('Step 7 — a permanently deleted post URL shows a not-found state', async () => {
     await deletePost.openDeleteDialog();
     await deletePost.confirmDelete();
     // Direct navigation to the deleted post now fails.
-    await page.goto(`https://staging.talktravel.com/post/${slug}`, { waitUntil: 'domcontentloaded' });
+    await deletePost.gotoPost(slug);
     await expect(deletePost.notFoundState).toBeVisible({ timeout: 10000 });
   });
 
   // ── Step 6: Delete a post WITH comments → "Deleted by author" placeholder ─
 
   test('Step 6 — deleting a post with comments shows the "Deleted by author" placeholder', async ({ page }) => {
-    const commentedSlug = await deletePost.createDisposablePost(`Delete w/ comments ${Date.now()}`, {
-      body: 'Post with a comment, for the placeholder branch.',
-      withComment: 'Automation seed comment on a soon-to-be-deleted post.',
-    });
+    // The seeded post has no comments yet — add one so this hits the placeholder branch.
+    await deletePost.addComment('Automation seed comment on a soon-to-be-deleted post.');
+    await deletePost.gotoPost(slug);
+
     await deletePost.openDeleteDialog();
     await deletePost.confirmDelete();
     // URL still resolves and shows the placeholder.
-    await expect(page).toHaveURL(new RegExp(`/post/${commentedSlug}`), { timeout: 15000 });
+    await expect(page).toHaveURL(new RegExp(`/post/${slug}`), { timeout: 15000 });
     await expect(deletePost.deletedPlaceholder).toBeVisible({ timeout: 10000 });
   });
 
   test('Step 6 — comments remain visible on a placeholder post', async ({ page }) => {
     const commentText = 'Automation seed comment that should survive deletion.';
-    await deletePost.createDisposablePost(`Delete keeps comments ${Date.now()}`, {
-      body: 'Post with a comment, for the placeholder branch.',
-      withComment: commentText,
-    });
+    await deletePost.addComment(commentText);
+    await deletePost.gotoPost(slug);
+
     await deletePost.openDeleteDialog();
     await deletePost.confirmDelete();
     await expect(page.getByText(commentText)).toBeVisible({ timeout: 10000 });
