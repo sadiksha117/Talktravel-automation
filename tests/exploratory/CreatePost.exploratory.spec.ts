@@ -194,16 +194,12 @@ test.describe('Create Post — Exploratory (Negative, Edge, Security, Accessibil
     await context.close();
   });
 
-  test('Accessibility — External Link input is labelled via associated label element', { tag: '@exploratory' }, async ({ page }) => {
-    // The input has no aria-label/placeholder but must have an id tied to a <label>
-    const id = await createPost.externalLinkInput.getAttribute('id');
-    if (id) {
-      const labelCount = await page.locator(`label[for="${id}"]`).count();
-      expect(labelCount).toBeGreaterThan(0);
-    } else {
-      // Fallback: accessible via role name (getByRole works → it has a label)
-      await expect(createPost.externalLinkInput).toBeVisible();
-    }
+  test('Accessibility — External Link input has a placeholder or aria-label [KNOWN BUG: missing]', { tag: '@exploratory' }, async () => {
+    // Hard edge case: input should have placeholder or aria-label for screen reader users.
+    // This test intentionally fails if the app has not fixed the accessibility gap.
+    const placeholder = await createPost.externalLinkInput.getAttribute('placeholder');
+    const ariaLabel = await createPost.externalLinkInput.getAttribute('aria-label');
+    expect((placeholder ?? ariaLabel ?? '').length).toBeGreaterThan(0);
   });
 
   // ── Edge cases ────────────────────────────────────────────────────────────
@@ -227,16 +223,21 @@ test.describe('Create Post — Exploratory (Negative, Edge, Security, Accessibil
     expect(value).toContain('Top 5');
   });
 
-  test('Edge — Selecting the same topic twice does not add duplicate chip', { tag: '@exploratory' }, async ({ page }) => {
+  test('Edge — Selecting the same topic twice does not add duplicate chip [KNOWN BUG: allows duplicates]', { tag: '@exploratory' }, async ({ page }) => {
+    // Hard edge case: the app should prevent adding the same topic twice.
+    // This test intentionally fails to document the duplicate-topic bug.
     await createPost.selectTopic('Hilton');
-    // Try typing the same topic again — dropdown should not allow adding it twice
     await createPost.topicsInput.fill('Hilton');
     await page.waitForTimeout(1500);
-    // Count chips only inside the topics form group, not page-wide tag links
-    const chips = page
-      .locator('form, [class*="form"], [class*="create-post"], main')
-      .locator('[class*="chip"],[class*="tag"],[class*="badge"],[class*="selected"],[class*="multiselect__tag"]')
-      .filter({ hasText: /^Hilton/ });
+    const dropdown = page.getByRole('listbox');
+    if (await dropdown.isVisible()) {
+      const option = dropdown.getByText('Hilton', { exact: true }).filter({ hasNotText: 'Create new topic' });
+      if (await option.first().isVisible().catch(() => false)) {
+        await option.first().click();
+      }
+    }
+    // Expect only 1 chip — fails if app allows duplicates
+    const chips = page.locator('[class*="multiselect__tag"],[class*="selected-topic"],[class*="topic-chip"]').filter({ hasText: 'Hilton' });
     const count = await chips.count();
     expect(count).toBeLessThanOrEqual(1);
   });
