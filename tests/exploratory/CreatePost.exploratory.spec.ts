@@ -195,8 +195,7 @@ test.describe('Create Post — Exploratory (Negative, Edge, Security, Accessibil
   });
 
   test('Accessibility — External Link input has a placeholder or aria-label [KNOWN BUG: missing]', { tag: '@exploratory' }, async () => {
-    // Hard edge case: input should have placeholder or aria-label for screen reader users.
-    // This test intentionally fails if the app has not fixed the accessibility gap.
+    test.fail(); // expected failure — documents real a11y bug; serial mode skips are avoided
     const placeholder = await createPost.externalLinkInput.getAttribute('placeholder');
     const ariaLabel = await createPost.externalLinkInput.getAttribute('aria-label');
     expect((placeholder ?? ariaLabel ?? '').length).toBeGreaterThan(0);
@@ -224,8 +223,8 @@ test.describe('Create Post — Exploratory (Negative, Edge, Security, Accessibil
   });
 
   test('Edge — Selecting the same topic twice does not add duplicate chip [KNOWN BUG: allows duplicates]', { tag: '@exploratory' }, async ({ page }) => {
+    test.fail(); // expected failure — documents real UX bug; serial mode skips are avoided
     // Hard edge case: the app should prevent adding the same topic twice.
-    // This test intentionally fails to document the duplicate-topic bug.
     await createPost.selectTopic('Hilton');
     await createPost.topicsInput.fill('Hilton');
     await page.waitForTimeout(1500);
