@@ -6,8 +6,8 @@ const VALID_PASSWORD = process.env.TEST_PASSWORD ?? 'Admin@123';
 const BASE_URL = 'https://staging.talktravel.com';
 
 test.describe('Create Post — Exploratory (Negative, Edge, Security, Accessibility)', () => {
-  // Serial prevents concurrent logins from rate-limiting the staging server.
-  // All test bugs are fixed below so no test fails → no cascade-skipping.
+  // Serial keeps 1 worker → no concurrent login rate-limiting.
+  // Known-bug tests are placed LAST so their real failures don't skip anything.
   test.describe.configure({ mode: 'serial' });
 
   let createPost: CreatePostExploratoryPage;
@@ -183,7 +183,6 @@ test.describe('Create Post — Exploratory (Negative, Edge, Security, Accessibil
     page.on('console', msg => {
       if (msg.type() === 'error') {
         const text = msg.text();
-        // Ignore third-party analytics/CSP noise that the app does not control
         const isThirdParty = /google|facebook|gtm|analytics|content security policy/i.test(text);
         if (!isThirdParty) errors.push(text);
       }
@@ -192,13 +191,6 @@ test.describe('Create Post — Exploratory (Negative, Edge, Security, Accessibil
     await cp.loginAndNavigateToCreatePost(VALID_EMAIL, VALID_PASSWORD);
     expect(errors).toHaveLength(0);
     await context.close();
-  });
-
-  test('Accessibility — External Link input has a placeholder or aria-label [KNOWN BUG: missing]', { tag: '@exploratory' }, async () => {
-    test.fail(); // expected failure — documents real a11y bug; serial mode skips are avoided
-    const placeholder = await createPost.externalLinkInput.getAttribute('placeholder');
-    const ariaLabel = await createPost.externalLinkInput.getAttribute('aria-label');
-    expect((placeholder ?? ariaLabel ?? '').length).toBeGreaterThan(0);
   });
 
   // ── Edge cases ────────────────────────────────────────────────────────────
@@ -220,25 +212,6 @@ test.describe('Create Post — Exploratory (Negative, Edge, Security, Accessibil
     await createPost.titleInput.fill('Post: "Top 5" tips & tricks — 100%');
     const value = await createPost.titleInput.inputValue();
     expect(value).toContain('Top 5');
-  });
-
-  test('Edge — Selecting the same topic twice does not add duplicate chip [KNOWN BUG: allows duplicates]', { tag: '@exploratory' }, async ({ page }) => {
-    test.fail(); // expected failure — documents real UX bug; serial mode skips are avoided
-    // Hard edge case: the app should prevent adding the same topic twice.
-    await createPost.selectTopic('Hilton');
-    await createPost.topicsInput.fill('Hilton');
-    await page.waitForTimeout(1500);
-    const dropdown = page.getByRole('listbox');
-    if (await dropdown.isVisible()) {
-      const option = dropdown.getByText('Hilton', { exact: true }).filter({ hasNotText: 'Create new topic' });
-      if (await option.first().isVisible().catch(() => false)) {
-        await option.first().click();
-      }
-    }
-    // Expect only 1 chip — fails if app allows duplicates
-    const chips = page.locator('[class*="multiselect__tag"],[class*="selected-topic"],[class*="topic-chip"]').filter({ hasText: 'Hilton' });
-    const count = await chips.count();
-    expect(count).toBeLessThanOrEqual(1);
   });
 
   test('Edge — Reloading /create-post while logged in keeps session and shows form', { tag: '@exploratory' }, async ({ page }) => {
@@ -286,5 +259,33 @@ test.describe('Create Post — Exploratory (Negative, Edge, Security, Accessibil
     await page.goto(`${BASE_URL}/trending`, { waitUntil: 'domcontentloaded' });
     await page.goto(`${BASE_URL}/create-post`, { waitUntil: 'domcontentloaded' });
     await expect(createPost.titleInput).toBeVisible({ timeout: 15000 });
+  });
+
+  // ── Known bugs — placed last so failures do not cascade-skip other tests ──
+
+  test('Accessibility — External Link input has a placeholder or aria-label [KNOWN BUG: missing]', { tag: '@exploratory' }, async () => {
+    // Real accessibility gap: screen readers cannot identify this field.
+    // Expected to FAIL until the bug is fixed.
+    const placeholder = await createPost.externalLinkInput.getAttribute('placeholder');
+    const ariaLabel = await createPost.externalLinkInput.getAttribute('aria-label');
+    expect((placeholder ?? ariaLabel ?? '').length).toBeGreaterThan(0);
+  });
+
+  test('Edge — Selecting the same topic twice does not add duplicate chip [KNOWN BUG: allows duplicates]', { tag: '@exploratory' }, async ({ page }) => {
+    // Real UX bug: app should prevent adding the same topic more than once.
+    // Expected to FAIL until the bug is fixed.
+    await createPost.selectTopic('Hilton');
+    await createPost.topicsInput.fill('Hilton');
+    await page.waitForTimeout(1500);
+    const dropdown = page.getByRole('listbox');
+    if (await dropdown.isVisible()) {
+      const option = dropdown.getByText('Hilton', { exact: true }).filter({ hasNotText: 'Create new topic' });
+      if (await option.first().isVisible().catch(() => false)) {
+        await option.first().click();
+      }
+    }
+    const chips = page.locator('[class*="multiselect__tag"],[class*="selected-topic"],[class*="topic-chip"]').filter({ hasText: 'Hilton' });
+    const count = await chips.count();
+    expect(count).toBeLessThanOrEqual(1);
   });
 });
