@@ -4,13 +4,15 @@ import { EditPostPage } from '../EditPost';
 /** The test account's own profile handle (used to tell own vs. foreign posts). */
 export const OWN_HANDLE = 'prempoudel_1';
 
+const BASE = 'https://staging.talktravel.com';
+
 /**
  * Exploratory page object for Edit Post — focused on PRODUCT-bug probes.
  *
- * Beyond the happy-path helpers in EditPostPage, this adds helpers that save an
- * edit and then inspect the *live* post / feed, so assertions catch real
- * defects (stored XSS, broken authorization, server-side validation gaps,
- * stale propagation) rather than just form-field behaviour.
+ * IMPORTANT: editing the Title regenerates the post slug, so the post moves to
+ * a NEW /post/{slug} after a title-changing save. Every save helper therefore
+ * RETURNS the post-save slug read from the live URL; callers must view the post
+ * using that returned slug, never a slug captured before the edit.
  */
 export class EditPostExploratoryPage extends EditPostPage {
   readonly loginPasswordField: Locator;
@@ -24,10 +26,31 @@ export class EditPostExploratoryPage extends EditPostPage {
     this.editedLabelOnView = page.getByText(/edited/i).first();
   }
 
-  /** Log in and land on an owned post's edit form; returns the post slug. */
+  /**
+   * Log in, open an owned post's *view* (to capture a valid permalink slug),
+   * then enter its edit form. Returns the pre-edit slug.
+   */
   async openEditForm(email: string, password: string): Promise<string> {
     await this.login(email, password);
-    await this.openOwnPostEdit();
+    const slug = await this.openOwnPostView();
+    const opened = await this.openEditFromSinglePost();
+    if (!opened) throw new Error('Could not open the edit form from the owned post view');
+    return slug;
+  }
+
+  /**
+   * Open the first owned post's public view (via My Posts) and return its slug.
+   * Leaves the browser on /post/{slug}.
+   */
+  async openOwnPostView(): Promise<string> {
+    await this.goToMyPosts();
+    const firstOwnPost = this.page
+      .locator('a[href^="/post/"]:not([href*="/-"])')
+      .filter({ visible: true })
+      .first();
+    await firstOwnPost.click();
+    await this.page.waitForURL('**/post/**', { timeout: 30000 });
+    await this.page.waitForLoadState('networkidle', { timeout: 15000 }).catch(() => {});
     return this.currentPostSlug();
   }
 
@@ -37,36 +60,61 @@ export class EditPostExploratoryPage extends EditPostPage {
     return await this.loginPasswordField.isVisible({ timeout: 3000 }).catch(() => false);
   }
 
-  /** Fill the Title and submit; wait until we leave the edit form (best effort). */
-  async setTitleAndSave(title: string): Promise<void> {
+  /** Fill the Title and submit; returns the post-save slug from the live URL. */
+  async setTitleAndSave(title: string): Promise<string> {
     await this.titleInput.fill(title);
     await this.dismissCookieBanner();
     await this.submitUpdate();
     await this.page.waitForURL(/\/post\/[^/?#]+$/, { timeout: 15000 }).catch(() => {});
+    return this.currentPostSlug();
   }
 
-  /** Open a post's public view by slug. */
+  /** Set the External Link and submit; returns the post-save slug. */
+  async setExternalLinkAndSave(url: string): Promise<string> {
+    await this.externalLinkInput.fill(url);
+    await this.dismissCookieBanner();
+    await this.submitUpdate();
+    await this.page.waitForURL(/\/post\/[^/?#]+$/, { timeout: 15000 }).catch(() => {});
+    return this.currentPostSlug();
+  }
+
+  /** Set the Discussion body and submit; returns the post-save slug. */
+  async setDiscussionAndSave(text: string): Promise<string> {
+    await this.discussionEditor.click();
+    await this.discussionEditor.fill(text);
+    await this.dismissCookieBanner();
+    await this.submitUpdate();
+    await this.page.waitForURL(/\/post\/[^/?#]+$/, { timeout: 15000 }).catch(() => {});
+    return this.currentPostSlug();
+  }
+
+  /** Open a post's public view by slug and wait for the heading to render. */
   async openPostView(slug: string): Promise<void> {
-    await this.page.goto(`https://staging.talktravel.com/post/${slug}`, { waitUntil: 'domcontentloaded' });
+    await this.page.goto(`${BASE}/post/${slug}`, { waitUntil: 'domcontentloaded' });
     await this.page.waitForLoadState('networkidle', { timeout: 15000 }).catch(() => {});
+  }
+
+  /** True when the current post view actually rendered (not a 404 page). */
+  async postViewLoaded(): Promise<boolean> {
+    const heading = (await this.postViewTitle.innerText({ timeout: 8000 }).catch(() => '')).trim();
+    return heading.length > 0 && !/destination not found|not found|404/i.test(heading);
   }
 
   /**
    * Scan the trending feed and open the first post NOT authored by the test
-   * account; returns its slug (we end up on that post's view), or '' if none
-   * is found after checking several candidates.
+   * account; returns its slug (we end on that post's view), or '' if none.
    */
   async openForeignPostSlug(): Promise<string> {
-    await this.page.goto('https://staging.talktravel.com/trending', { waitUntil: 'domcontentloaded' });
+    await this.page.goto(`${BASE}/trending`, { waitUntil: 'domcontentloaded' });
     await this.dismissCookieBanner();
     const links = this.page.locator('a[href^="/post/"]:not([href*="/-"])').filter({ visible: true });
     await links.first().waitFor({ state: 'visible', timeout: 20000 }).catch(() => {});
-    const hrefs = (await links.evaluateAll(els =>
+    const hrefs = await links.evaluateAll(els =>
       els.map(e => (e as HTMLAnchorElement).getAttribute('href')).filter((h): h is string => !!h)
-    ));
+    );
     const unique = [...new Set(hrefs)].slice(0, 10);
     for (const href of unique) {
-      await this.page.goto(`https://staging.talktravel.com${href}`, { waitUntil: 'domcontentloaded' });
+      await this.page.goto(`${BASE}${href}`, { waitUntil: 'domcontentloaded' });
       await this.page.waitForLoadState('networkidle', { timeout: 15000 }).catch(() => {});
       const authorHref = await this.page
         .locator('a[href*="/profile/"]').first().getAttribute('href').catch(() => null);
@@ -89,23 +137,6 @@ export class EditPostExploratoryPage extends EditPostPage {
   /** Count of topic tag links rendered on the post view. */
   async topicCountOnView(): Promise<number> {
     return await this.page.locator('a[href*="/tags/"]').count();
-  }
-
-  /** Set the External Link and submit. */
-  async setExternalLinkAndSave(url: string): Promise<void> {
-    await this.externalLinkInput.fill(url);
-    await this.dismissCookieBanner();
-    await this.submitUpdate();
-    await this.page.waitForURL(/\/post\/[^/?#]+$/, { timeout: 15000 }).catch(() => {});
-  }
-
-  /** Set the Discussion body and submit. */
-  async setDiscussionAndSave(text: string): Promise<void> {
-    await this.discussionEditor.click();
-    await this.discussionEditor.fill(text);
-    await this.dismissCookieBanner();
-    await this.submitUpdate();
-    await this.page.waitForURL(/\/post\/[^/?#]+$/, { timeout: 15000 }).catch(() => {});
   }
 
   /** Relative "… ago" timestamp shown in the post header (or '' if absent). */
