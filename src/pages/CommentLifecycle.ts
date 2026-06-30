@@ -78,19 +78,28 @@ export class CommentLifecyclePage extends PostLoginSinglePostViewPage {
       .last();
   }
 
-  /** Fills the top-level comment editor and submits. Returns false if the editor never activated. */
-  async addTopLevelComment(text: string): Promise<boolean> {
-    let input: Locator;
-    try {
-      input = await this.getCommentInput();
-    } catch {
-      return false;
-    }
+  /** Fills the top-level comment editor and submits. Throws if the editor never activated. */
+  async addTopLevelComment(text: string): Promise<void> {
+    const input = await this.getCommentInput();
     await input.click();
     await input.fill(text);
     await this.commentSubmitBtn.click();
     await this.page.getByText(text).first().waitFor({ state: 'visible', timeout: 15000 });
-    return true;
+  }
+
+  /** Comment-level upvote button scoped to a specific comment row. */
+  upvoteIn(row: Locator): Locator {
+    return row.locator('button[data-action="upvote"]').first();
+  }
+
+  /** Comment-level downvote button scoped to a specific comment row. */
+  downvoteIn(row: Locator): Locator {
+    return row.locator('button[data-action="downvote"]').first();
+  }
+
+  /** Comment-level share button scoped to a specific comment row. */
+  shareIn(row: Locator): Locator {
+    return row.getByRole('button', { name: /share/i }).first();
   }
 
   /** Opens the inline reply box under the given comment row, submits `text`. */

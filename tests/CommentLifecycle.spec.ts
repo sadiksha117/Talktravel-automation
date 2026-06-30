@@ -6,14 +6,13 @@ import { CommentLifecyclePage } from '../src/pages/CommentLifecycle';
  *
  * Mirrors docs/Comment_lifecycle.md, covering ONLY the positive cases: valid
  * inputs that should succeed (add, reply, thread, vote, share, edit, delete,
- * sort, Jetfuel). Negative / validation / cancel cases (empty-comment
- * rejection, cancel reply, cancel edit, cancel delete) are intentionally
+ * sort, Jetfuel). Negative / validation / cancel cases are intentionally
  * excluded from this file.
  *
- * All selectors come from the CommentLifecyclePage page object, which uses the
- * locators already confirmed against this app (Quill `.ql-editor`,
- * `button[data-action="upvote|downvote"]`, role-based reply/menu/dialog
- * selectors) rather than invented data-testid/data-level hooks.
+ * Every test runs for real — no test.skip() guards. Each test that needs a
+ * comment creates its own, so the vote/share/menu steps never depend on a post
+ * already having comments. Selectors live in the CommentLifecyclePage page
+ * object and use the locators confirmed against this app.
  */
 
 const VALID_EMAIL    = 'prempoudel72707@gmail.com';
@@ -34,38 +33,23 @@ test.describe('Comment Lifecycle — Happy Path (positive only)', () => {
 
   test('Step 1 — submitting a valid comment publishes it and clears the input', async ({ page }) => {
     const text = `Top-level ${Date.now()}`;
-    const ok = await flow.addTopLevelComment(text);
-    test.skip(!ok, 'Comment input not found — Quill editor did not activate');
+    await flow.addTopLevelComment(text);
 
     await expect(page.getByText(text)).toBeVisible({ timeout: 15000 });
-    const editor = page.locator('.ql-editor[contenteditable="true"]').first();
-    if (await editor.isVisible({ timeout: 2000 }).catch(() => false)) {
-      await expect(editor).toHaveText('');
-    }
+    await expect(page.locator('.ql-editor[contenteditable="true"]').first()).toHaveText('');
   });
 
   // ── Step 2: Rich-text formatting in a comment ──────────────────────────────
 
   test('Step 2 — a bold-formatted comment renders bold text when published', async ({ page }) => {
-    let input: Locator;
-    try {
-      input = await flow.getCommentInput();
-    } catch {
-      test.skip(true, 'Comment input not found — Quill editor did not activate');
-      return;
-    }
+    const input = await flow.getCommentInput();
     const marker = `Bold ${Date.now()}`;
     await input.click();
     await page.keyboard.type(marker);
     await page.keyboard.press('Control+A');
 
-    // Quill toolbar bold control is `button.ql-bold`; fall back to an aria label.
-    const boldBtn = page.locator('button.ql-bold')
-      .or(page.getByRole('button', { name: /^bold$/i }))
-      .first();
-    const boldVisible = await boldBtn.isVisible({ timeout: 3000 }).catch(() => false);
-    test.skip(!boldVisible, 'Bold toolbar control not found — rich-text toolbar unavailable');
-    await boldBtn.click();
+    // Quill toolbar bold control is `button.ql-bold`.
+    await page.locator('button.ql-bold').first().click();
     await flow.commentSubmitBtn.click();
 
     await expect(flow.commentRow(marker).locator('strong, b').first()).toBeVisible({ timeout: 15000 });
@@ -75,23 +59,18 @@ test.describe('Comment Lifecycle — Happy Path (positive only)', () => {
 
   test('Step 4 — replying to a comment creates a nested reply', async ({ page }) => {
     const parentText = `Parent ${Date.now()}`;
-    const ok = await flow.addTopLevelComment(parentText);
-    test.skip(!ok, 'Comment input not found — Quill editor did not activate');
+    await flow.addTopLevelComment(parentText);
 
     const replyText = `Level 2 reply ${Date.now()}`;
     await flow.replyTo(flow.commentRow(parentText), replyText);
     await expect(page.getByText(replyText)).toBeVisible({ timeout: 15000 });
   });
 
-  // ── Step 6/7: Reply to an existing reply still creates the reply ───────────
-  // Positive framing of the threading rule: replying to a nested reply succeeds.
-  // (The visual level-4 flatten cap can't be asserted without a confirmed depth
-  // hook in the DOM, so this verifies the create behaviour only.)
+  // ── Step 6: Reply to an existing reply still creates a deeper reply ─────────
 
   test('Step 6 — replying to a nested reply creates a deeper reply', async ({ page }) => {
     const parentText = `Thread parent ${Date.now()}`;
-    const ok = await flow.addTopLevelComment(parentText);
-    test.skip(!ok, 'Comment input not found — Quill editor did not activate');
+    await flow.addTopLevelComment(parentText);
 
     const level2 = `Thread level 2 ${Date.now()}`;
     await flow.replyTo(flow.commentRow(parentText), level2);
@@ -104,9 +83,10 @@ test.describe('Comment Lifecycle — Happy Path (positive only)', () => {
   // ── Step 8: Upvote a comment ───────────────────────────────────────────────
 
   test('Step 8 — upvoting a comment is accepted (stays on the post page)', async ({ page }) => {
-    const visible = await flow.commentUpvoteBtn.isVisible({ timeout: 5000 }).catch(() => false);
-    test.skip(!visible, 'No comment-level upvote button found — post may have no comments');
-    await flow.commentUpvoteBtn.click();
+    const text = `Upvote me ${Date.now()}`;
+    await flow.addTopLevelComment(text);
+
+    await flow.upvoteIn(flow.commentRow(text)).click();
     await expect(page).toHaveURL(/\/post\/.+/);
     await expect(page).not.toHaveURL(/\/login/);
   });
@@ -114,9 +94,10 @@ test.describe('Comment Lifecycle — Happy Path (positive only)', () => {
   // ── Step 9: Downvote a comment ─────────────────────────────────────────────
 
   test('Step 9 — downvoting a comment is accepted (stays on the post page)', async ({ page }) => {
-    const visible = await flow.commentDownvoteBtn.isVisible({ timeout: 5000 }).catch(() => false);
-    test.skip(!visible, 'No comment-level downvote button found — post may have no comments');
-    await flow.commentDownvoteBtn.click();
+    const text = `Downvote me ${Date.now()}`;
+    await flow.addTopLevelComment(text);
+
+    await flow.downvoteIn(flow.commentRow(text)).click();
     await expect(page).toHaveURL(/\/post\/.+/);
     await expect(page).not.toHaveURL(/\/login/);
   });
@@ -125,9 +106,10 @@ test.describe('Comment Lifecycle — Happy Path (positive only)', () => {
 
   test('Step 10 — sharing a comment shows a link-copied confirmation toast', async ({ page }) => {
     await page.context().grantPermissions(['clipboard-read', 'clipboard-write']);
-    const visible = await flow.commentShareBtn.isVisible({ timeout: 10000 }).catch(() => false);
-    test.skip(!visible, 'No comment-level share button found — post may have no comments');
-    await flow.commentShareBtn.click();
+    const text = `Share me ${Date.now()}`;
+    await flow.addTopLevelComment(text);
+
+    await flow.shareIn(flow.commentRow(text)).click();
     await expect(flow.linkCopiedToast).toBeVisible();
   });
 
@@ -135,8 +117,7 @@ test.describe('Comment Lifecycle — Happy Path (positive only)', () => {
 
   test('Step 11 — 3-dot menu on own comment shows Edit and Delete', async () => {
     const text = `Own comment ${Date.now()}`;
-    const ok = await flow.addTopLevelComment(text);
-    test.skip(!ok, 'Comment input not found — Quill editor did not activate');
+    await flow.addTopLevelComment(text);
 
     await flow.openCommentMenu(flow.commentRow(text));
     await expect(flow.menuEditItem).toBeVisible();
@@ -147,8 +128,7 @@ test.describe('Comment Lifecycle — Happy Path (positive only)', () => {
 
   test('Step 13 — editing own comment updates the text and shows the Edited label', async ({ page }) => {
     const original = `Edit me ${Date.now()}`;
-    const ok = await flow.addTopLevelComment(original);
-    test.skip(!ok, 'Comment input not found — Quill editor did not activate');
+    await flow.addTopLevelComment(original);
 
     const row = flow.commentRow(original);
     await flow.openCommentMenu(row);
@@ -166,8 +146,7 @@ test.describe('Comment Lifecycle — Happy Path (positive only)', () => {
 
   test('Step 15 — editing a comment twice still shows exactly one Edited label', async ({ page }) => {
     const original = `Multi-edit ${Date.now()}`;
-    const ok = await flow.addTopLevelComment(original);
-    test.skip(!ok, 'Comment input not found — Quill editor did not activate');
+    await flow.addTopLevelComment(original);
 
     // First edit
     await flow.openCommentMenu(flow.commentRow(original));
@@ -192,8 +171,7 @@ test.describe('Comment Lifecycle — Happy Path (positive only)', () => {
 
   test('Step 16 — deleting own comment with no replies removes it from the thread', async ({ page }) => {
     const text = `Delete me ${Date.now()}`;
-    const ok = await flow.addTopLevelComment(text);
-    test.skip(!ok, 'Comment input not found — Quill editor did not activate');
+    await flow.addTopLevelComment(text);
 
     await flow.openCommentMenu(flow.commentRow(text));
     await flow.menuDeleteItem.click();
@@ -206,8 +184,7 @@ test.describe('Comment Lifecycle — Happy Path (positive only)', () => {
 
   test('Step 17 — deleting a parent comment with a reply leaves a placeholder and keeps the reply', async ({ page }) => {
     const parentText = `Parent to delete ${Date.now()}`;
-    const ok = await flow.addTopLevelComment(parentText);
-    test.skip(!ok, 'Comment input not found — Quill editor did not activate');
+    await flow.addTopLevelComment(parentText);
 
     const childText = `Child reply ${Date.now()}`;
     await flow.replyTo(flow.commentRow(parentText), childText);
@@ -223,8 +200,6 @@ test.describe('Comment Lifecycle — Happy Path (positive only)', () => {
   // ── Step 19: Sort comments Newest ↔ Oldest ─────────────────────────────────
 
   test('Step 19 — switching the sort control to Oldest updates the selection', async ({ page }) => {
-    const visible = await flow.commentSort.isVisible({ timeout: 10000 }).catch(() => false);
-    test.skip(!visible, 'Comment sort control not found');
     await flow.commentSort.click();
     const oldest = page.getByRole('option', { name: /oldest/i })
       .or(page.getByRole('menuitem', { name: /oldest/i }))
@@ -235,23 +210,17 @@ test.describe('Comment Lifecycle — Happy Path (positive only)', () => {
   });
 
   // ── Step 20: Comment earns Jetfuel ─────────────────────────────────────────
-  // Best-effort: Jetfuel is eventually consistent, so we assert it does not
-  // decrease after posting (a strict +2 equality flakes on a shared account).
+  // Jetfuel is eventually consistent, so we assert it does not decrease after
+  // posting (a strict +2 equality would flake on a shared account).
 
   test('Step 20 — posting a comment does not decrease the user Jetfuel balance', async ({ page }) => {
-    // No confirmed data-testid for the balance; match on the Jetfuel label region.
-    const jetfuel = page.locator('[class*="jetfuel" i]')
-      .or(page.getByText(/jetfuel/i))
-      .first();
-    const visible = await jetfuel.isVisible({ timeout: 5000 }).catch(() => false);
-    test.skip(!visible, 'Jetfuel balance not visible on the post page');
-
+    const jetfuel = page.locator('[class*="jetfuel" i]').or(page.getByText(/jetfuel/i)).first();
     const read = async () => parseInt((await jetfuel.textContent())?.replace(/\D/g, '') || '0', 10);
-    const before = await read();
-    const ok = await flow.addTopLevelComment(`Jetfuel ${Date.now()}`);
-    test.skip(!ok, 'Comment input not found — Quill editor did not activate');
 
+    const before = await read();
+    await flow.addTopLevelComment(`Jetfuel ${Date.now()}`);
     await page.waitForTimeout(1000);
+
     expect(await read()).toBeGreaterThanOrEqual(before);
   });
 });

@@ -170,16 +170,21 @@ export class PostLoginSinglePostViewPage extends BasePage {
     if (quillVisible) {
       // Click the editor — many Quill instances only activate (flip contenteditable)
       // after receiving a click/focus event, even when the user is authenticated.
-      await quill.click({ force: true, timeout: 5000 }).catch(() => {});
-
-      try {
-        await this.page.waitForFunction(
-          () => document.querySelector('.ql-editor')?.getAttribute('contenteditable') === 'true',
-          { timeout: 8000 }
-        );
-        return this.page.locator('.ql-editor[contenteditable="true"]').first();
-      } catch {
-        // Quill still not editable after click — fall through
+      // Retry the click/activation a few times: under load the editor can be slow
+      // to flip to contenteditable=true, and a single attempt is flaky.
+      await quill.scrollIntoViewIfNeeded().catch(() => {});
+      for (let attempt = 1; attempt <= 3; attempt++) {
+        await quill.click({ force: true, timeout: 5000 }).catch(() => {});
+        try {
+          await this.page.waitForFunction(
+            () => document.querySelector('.ql-editor')?.getAttribute('contenteditable') === 'true',
+            { timeout: 8000 }
+          );
+          return this.page.locator('.ql-editor[contenteditable="true"]').first();
+        } catch {
+          // Not editable yet — wait briefly and retry the click.
+          await this.page.waitForTimeout(attempt * 1000);
+        }
       }
     }
 
