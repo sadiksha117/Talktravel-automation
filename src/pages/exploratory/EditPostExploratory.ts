@@ -1,40 +1,27 @@
 import { type Page, type Locator } from '@playwright/test';
 import { EditPostPage } from '../EditPost';
 
+/** The test account's own profile handle (used to tell own vs. foreign posts). */
+export const OWN_HANDLE = 'prempoudel_1';
+
 /**
- * Exploratory page object for the Edit Post flow.
+ * Exploratory page object for Edit Post — focused on PRODUCT-bug probes.
  *
- * Reuses the happy-path helpers from EditPostPage (login, openOwnPostEdit,
- * gotoEdit, topic helpers, real `.autocomplete-tag-pill` selectors) and adds
- * locators used only by the edge / negative / security / accessibility checks.
+ * Beyond the happy-path helpers in EditPostPage, this adds helpers that save an
+ * edit and then inspect the *live* post / feed, so assertions catch real
+ * defects (stored XSS, broken authorization, server-side validation gaps,
+ * stale propagation) rather than just form-field behaviour.
  */
 export class EditPostExploratoryPage extends EditPostPage {
-  // Logged-out detection (password field on the login form)
   readonly loginPasswordField: Locator;
-  // "Post not found" / error surfaces
-  readonly notFound: Locator;
-  // Generic inline validation message
-  readonly anyValidationError: Locator;
-  // Max-topics messaging
-  readonly maxTopicsError: Locator;
-  // Page main heading ("Edit Post")
-  readonly editHeading: Locator;
-  // Rich-text toolbar buttons (bold/italic/...)
-  readonly toolbarButtons: Locator;
+  readonly postViewTitle: Locator;
+  readonly editedLabelOnView: Locator;
 
   constructor(page: Page) {
     super(page);
-
     this.loginPasswordField = page.locator('input[type="password"]').first();
-    this.notFound = page
-      .getByText(/not found|404|doesn'?t exist|does not exist|no longer available|something went wrong/i)
-      .first();
-    this.anyValidationError = page
-      .getByText(/required|invalid|must|at least|maximum|valid url|cannot be empty/i)
-      .first();
-    this.maxTopicsError = page.getByText(/maximum 5 topics|max.*5.*topic|up to 5|only.*5/i).first();
-    this.editHeading = page.getByRole('heading', { name: /edit post/i });
-    this.toolbarButtons = page.locator('.ql-toolbar button');
+    this.postViewTitle = page.getByRole('heading', { level: 1 });
+    this.editedLabelOnView = page.getByText(/edited/i).first();
   }
 
   /** Log in and land on an owned post's edit form; returns the post slug. */
@@ -44,14 +31,55 @@ export class EditPostExploratoryPage extends EditPostPage {
     return this.currentPostSlug();
   }
 
-  /** True if the current page looks logged-out (login link or password field). */
+  /** True if the current page looks logged-out. */
   async isLoggedOut(): Promise<boolean> {
     if (/\/login/.test(this.page.url())) return true;
-    if (await this.loginPasswordField.isVisible({ timeout: 3000 }).catch(() => false)) return true;
-    return await this.page
-      .getByRole('link', { name: /^log ?in$|join free/i })
+    return await this.loginPasswordField.isVisible({ timeout: 3000 }).catch(() => false);
+  }
+
+  /** Fill the Title and submit; wait until we leave the edit form (best effort). */
+  async setTitleAndSave(title: string): Promise<void> {
+    await this.titleInput.fill(title);
+    await this.dismissCookieBanner();
+    await this.submitUpdate();
+    await this.page.waitForURL(/\/post\/[^/?#]+$/, { timeout: 15000 }).catch(() => {});
+  }
+
+  /** Open a post's public view by slug. */
+  async openPostView(slug: string): Promise<void> {
+    await this.page.goto(`https://staging.talktravel.com/post/${slug}`, { waitUntil: 'domcontentloaded' });
+    await this.page.waitForLoadState('networkidle', { timeout: 15000 }).catch(() => {});
+  }
+
+  /**
+   * Open the first trending post that is NOT authored by the test account and
+   * return its slug, or '' if none could be found.
+   */
+  async openForeignPostSlug(): Promise<string> {
+    await this.openFirstPost();
+    const authorHref = await this.page
+      .locator('a[href*="/profile/"]')
       .first()
-      .isVisible({ timeout: 2000 })
-      .catch(() => false);
+      .getAttribute('href')
+      .catch(() => null);
+    const slug = this.currentPostSlug();
+    if (authorHref && !authorHref.includes(OWN_HANDLE)) return slug;
+    return '';
+  }
+
+  /** Number of comments reported by the "N Comments" heading (0 if absent). */
+  async commentCount(): Promise<number> {
+    const text = await this.page
+      .getByRole('heading', { name: /comments/i })
+      .first()
+      .innerText()
+      .catch(() => '');
+    const m = text.match(/(\d+)/);
+    return m ? parseInt(m[1], 10) : 0;
+  }
+
+  /** Count of topic tag links rendered on the post view. */
+  async topicCountOnView(): Promise<number> {
+    return await this.page.locator('a[href*="/tags/"]').count();
   }
 }

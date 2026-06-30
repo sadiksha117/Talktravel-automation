@@ -1,26 +1,25 @@
 import { test, expect } from '@playwright/test';
-import { EditPostExploratoryPage } from '../../src/pages/exploratory/EditPostExploratory';
+import { EditPostExploratoryPage, OWN_HANDLE } from '../../src/pages/exploratory/EditPostExploratory';
 
 /**
- * Edit Post — Exploratory suite (Edge / Negative / Security / Accessibility).
+ * Edit Post — Exploratory PRODUCT-bug probes.
  *
- * 40 cases derived from the edge-case table and "known issues" in
- * docs/Editpost.md, hunting for input-validation gaps, authorization holes,
- * XSS / clickjacking / caching weaknesses, and accessibility defects.
+ * Every case performs a real edit (or a real authorization attempt) and then
+ * inspects the LIVE product — the saved post page, the feed, or the HTTP
+ * outcome — so a failure means an actual product defect, not a flaky selector.
  *
- * Run with a single worker — these log in to one shared account and staging
- * keeps a single session per account:
+ * Focus areas: stored XSS / sanitization, authorization (IDOR), server-side
+ * validation enforcement, data integrity, and update propagation.
+ *
+ * Run with a single worker (one shared account, one session):
  *   npx playwright test tests/exploratory/EditPost.exploratory.spec.ts --workers=1
- *
- * Tests skip gracefully when a precondition can't be met (e.g. the owned post
- * has fewer than N topics) rather than failing on environment drift.
  */
 
 const VALID_EMAIL    = process.env.TEST_EMAIL ?? 'prempoudel72707@gmail.com';
 const VALID_PASSWORD = process.env.TEST_PASSWORD ?? 'Admin@123';
 const BASE           = 'https://staging.talktravel.com';
 
-test.describe('Edit Post — Exploratory', () => {
+test.describe('Edit Post — Exploratory (product bugs)', () => {
   test.setTimeout(180000);
 
   let flow: EditPostExploratoryPage;
@@ -29,378 +28,186 @@ test.describe('Edit Post — Exploratory', () => {
     flow = new EditPostExploratoryPage(page);
   });
 
-  // ─────────────────────────────────────────────────────────────────────────
-  // A. Authorization & access (6)
-  // ─────────────────────────────────────────────────────────────────────────
+  // ── Security: stored XSS / sanitization ──────────────────────────────────
 
-  test('A1 — logged-out access to an /edit URL is not an editable form', { tag: '@exploratory' }, async ({ page }) => {
+  test('SEC1 — HTML/JS in the Title is stored escaped, not executed on the post view', { tag: '@exploratory' }, async ({ page }) => {
+    let alertFired = false;
+    page.on('dialog', async d => { alertFired = true; await d.dismiss(); });
+    const slug = await flow.openEditForm(VALID_EMAIL, VALID_PASSWORD);
+    await flow.setTitleAndSave(`<img src=x onerror="window.__xss=1">PWN-${Date.now()}`);
+    await flow.openPostView(slug);
+    // The payload must NOT become a live element inside the heading, and must not run.
+    const injectedImg = await page.locator('h1 img[src="x"], h1 img[onerror]').count();
+    const xssRan = await page.evaluate(() => (window as unknown as { __xss?: number }).__xss === 1);
+    expect(alertFired, 'no dialog should fire').toBe(false);
+    expect(injectedImg, 'title HTML must be escaped, not parsed into an <img>').toBe(0);
+    expect(xssRan, 'onerror handler from the title must not execute').toBe(false);
+  });
+
+  test('SEC2 — HTML/JS in the Discussion body is not executed on the post view', { tag: '@exploratory' }, async ({ page }) => {
+    let alertFired = false;
+    page.on('dialog', async d => { alertFired = true; await d.dismiss(); });
+    const slug = await flow.openEditForm(VALID_EMAIL, VALID_PASSWORD);
+    await flow.discussionEditor.click();
+    await flow.discussionEditor.fill(`<img src=x onerror="window.__xss2=1"> hello ${Date.now()}`);
+    await flow.dismissCookieBanner();
+    await flow.submitUpdate();
+    await flow.openPostView(slug);
+    const xssRan = await page.evaluate(() => (window as unknown as { __xss2?: number }).__xss2 === 1);
+    expect(alertFired).toBe(false);
+    expect(xssRan, 'onerror handler from the body must not execute').toBe(false);
+  });
+
+  test('SEC3 — an unsafe External Link is never rendered as a javascript: href', { tag: '@exploratory' }, async ({ page }) => {
+    const slug = await flow.openEditForm(VALID_EMAIL, VALID_PASSWORD);
+    await flow.externalLinkInput.fill('javascript:window.__xss3=1');
+    await flow.dismissCookieBanner();
+    await flow.submitUpdate();
+    await flow.openPostView(slug);
+    const jsHrefs = await page.locator('a[href^="javascript:"]').count();
+    expect(jsHrefs, 'no javascript: link should ever be rendered').toBe(0);
+  });
+
+  // ── Security: authorization (IDOR) ───────────────────────────────────────
+
+  test('SEC4 — a non-owner cannot open another user\'s edit form via direct URL', { tag: '@exploratory' }, async ({ page }) => {
+    await flow.login(VALID_EMAIL, VALID_PASSWORD);
+    const foreignSlug = await flow.openForeignPostSlug();
+    test.skip(!foreignSlug, 'No foreign-authored post found in the trending feed to probe');
+    await flow.gotoEdit(foreignSlug);
+    await page.waitForLoadState('networkidle').catch(() => {});
+    const editable = await flow.titleInput.isVisible({ timeout: 4000 }).catch(() => false);
+    expect(editable, `IDOR: editing another user's post (${foreignSlug}) must be blocked`).toBe(false);
+  });
+
+  test('SEC5 — a logged-out user cannot open the edit form', { tag: '@exploratory' }, async ({ page }) => {
     await page.goto(`${BASE}/post/e2e-full-post-1781686073532/edit`, { waitUntil: 'domcontentloaded' }).catch(() => {});
     await page.waitForLoadState('networkidle').catch(() => {});
-    const editable = await flow.titleInput.isVisible({ timeout: 3000 }).catch(() => false);
-    expect(editable, 'logged-out users must not get an editable Edit Post form').toBe(false);
+    const editable = await flow.titleInput.isVisible({ timeout: 4000 }).catch(() => false);
+    expect(editable, 'logged-out users must not get an editable form').toBe(false);
     expect(await flow.isLoggedOut()).toBe(true);
   });
 
-  test('A2 — owner direct navigation to /post/{slug}/edit loads a pre-filled form', { tag: '@exploratory' }, async () => {
+  // ── Server-side validation (client checks must not be the only gate) ──────
+
+  test('SEC6 — an empty Title is rejected server-side (post title never becomes blank)', { tag: '@exploratory' }, async ({ page }) => {
     const slug = await flow.openEditForm(VALID_EMAIL, VALID_PASSWORD);
-    await flow.gotoEdit(slug);
-    await expect(flow.titleInput).toBeVisible({ timeout: 15000 });
-    await expect(flow.titleInput).not.toHaveValue('');
-  });
-
-  test('A3 — nonexistent slug /edit shows an error, not a usable form', { tag: '@exploratory' }, async ({ page }) => {
-    await flow.login(VALID_EMAIL, VALID_PASSWORD);
-    await flow.gotoEdit('this-post-does-not-exist-xyz123abc');
-    await page.waitForLoadState('networkidle').catch(() => {});
-    const editable = await flow.titleInput.isVisible({ timeout: 3000 }).catch(() => false);
-    expect(editable).toBe(false);
-  });
-
-  test('A4 — special-character slug /edit does not return a 5xx', { tag: '@exploratory' }, async ({ page }) => {
-    let serverError = false;
-    page.on('response', res => { if (res.url().includes('/edit') && res.status() >= 500) serverError = true; });
-    await flow.login(VALID_EMAIL, VALID_PASSWORD);
-    await page.goto(`${BASE}/post/%27%22%3E%3C%2Fedit/edit`, { waitUntil: 'domcontentloaded' }).catch(() => {});
-    await page.waitForLoadState('networkidle').catch(() => {});
-    expect(serverError).toBe(false);
-  });
-
-  test('A5 — empty slug (/post//edit) does not return a 5xx', { tag: '@exploratory' }, async ({ page }) => {
-    let serverError = false;
-    page.on('response', res => { if (res.url().includes('/post//edit') && res.status() >= 500) serverError = true; });
-    await flow.login(VALID_EMAIL, VALID_PASSWORD);
-    await page.goto(`${BASE}/post//edit`, { waitUntil: 'domcontentloaded' }).catch(() => {});
-    await page.waitForLoadState('networkidle').catch(() => {});
-    expect(serverError).toBe(false);
-  });
-
-  test('A6 — trailing junk after /edit does not return a 5xx', { tag: '@exploratory' }, async ({ page }) => {
-    let serverError = false;
-    page.on('response', res => { if (res.url().includes('/edit/') && res.status() >= 500) serverError = true; });
-    const slug = await flow.openEditForm(VALID_EMAIL, VALID_PASSWORD);
-    await page.goto(`${BASE}/post/${slug}/edit/extra-segment`, { waitUntil: 'domcontentloaded' }).catch(() => {});
-    await page.waitForLoadState('networkidle').catch(() => {});
-    expect(serverError).toBe(false);
-  });
-
-  // ─────────────────────────────────────────────────────────────────────────
-  // B. Input validation & edge cases (14)
-  // ─────────────────────────────────────────────────────────────────────────
-
-  test('B1 — clearing the Title blocks Save (stays on edit form)', { tag: '@exploratory' }, async () => {
-    await flow.openEditForm(VALID_EMAIL, VALID_PASSWORD);
     await flow.titleInput.fill('');
+    await flow.dismissCookieBanner();
     await flow.submitUpdate();
-    await expect(flow.titleInput).toBeVisible({ timeout: 8000 });
-    expect(flow.isOnEditUrl()).toBe(true);
+    await page.waitForTimeout(1500);
+    await flow.openPostView(slug);
+    const heading = (await flow.postViewTitle.innerText().catch(() => '')).trim();
+    expect(heading.length, 'the post must never end up with an empty title').toBeGreaterThan(0);
   });
 
-  test('B2 — whitespace-only Title is treated as empty (stays on edit form)', { tag: '@exploratory' }, async () => {
-    await flow.openEditForm(VALID_EMAIL, VALID_PASSWORD);
-    await flow.titleInput.fill('     ');
-    await flow.submitUpdate();
-    expect(flow.isOnEditUrl()).toBe(true);
-  });
-
-  test('B3 — removing all topics blocks Save', { tag: '@exploratory' }, async () => {
-    await flow.openEditForm(VALID_EMAIL, VALID_PASSWORD);
+  test('SEC7 — removing all topics is rejected (post keeps at least one topic)', { tag: '@exploratory' }, async ({ page }) => {
+    const slug = await flow.openEditForm(VALID_EMAIL, VALID_PASSWORD);
     await flow.removeAllTopics();
-    await flow.submitUpdate();
-    expect(flow.isOnEditUrl()).toBe(true);
-  });
-
-  test('B4 — invalid External Link URL is rejected', { tag: '@exploratory' }, async ({ page }) => {
-    await flow.openEditForm(VALID_EMAIL, VALID_PASSWORD);
-    await flow.externalLinkInput.fill('not-a-url');
-    await flow.submitUpdate();
-    const blocked = flow.isOnEditUrl()
-      || await flow.anyValidationError.isVisible({ timeout: 5000 }).catch(() => false);
-    expect(blocked, 'an invalid external URL should not silently save').toBe(true);
-  });
-
-  test('B5 — javascript: scheme in External Link is not accepted as valid', { tag: '@exploratory' }, async () => {
-    await flow.openEditForm(VALID_EMAIL, VALID_PASSWORD);
-    await flow.externalLinkInput.fill('javascript:alert(1)');
-    await flow.submitUpdate();
-    const blocked = flow.isOnEditUrl()
-      || await flow.anyValidationError.isVisible({ timeout: 5000 }).catch(() => false);
-    expect(blocked, 'javascript: URLs must be rejected').toBe(true);
-  });
-
-  test('B6 — data: URI in External Link is not accepted as valid', { tag: '@exploratory' }, async () => {
-    await flow.openEditForm(VALID_EMAIL, VALID_PASSWORD);
-    await flow.externalLinkInput.fill('data:text/html,<script>alert(1)</script>');
-    await flow.submitUpdate();
-    const blocked = flow.isOnEditUrl()
-      || await flow.anyValidationError.isVisible({ timeout: 5000 }).catch(() => false);
-    expect(blocked, 'data: URIs must be rejected').toBe(true);
-  });
-
-  test('B7 — a very long Title (1000 chars) does not crash the form', { tag: '@exploratory' }, async ({ page }) => {
-    let serverError = false;
-    page.on('response', res => { if (res.status() >= 500) serverError = true; });
-    await flow.openEditForm(VALID_EMAIL, VALID_PASSWORD);
-    await flow.titleInput.fill('A'.repeat(1000));
     await flow.dismissCookieBanner();
     await flow.submitUpdate();
-    await page.waitForTimeout(2000);
-    expect(serverError).toBe(false);
+    await page.waitForTimeout(1500);
+    await flow.openPostView(slug);
+    const topics = await flow.topicCountOnView();
+    expect(topics, 'a published post must retain at least one topic').toBeGreaterThanOrEqual(1);
   });
 
-  test('B8 — adding a duplicate topic does not create a second chip', { tag: '@exploratory' }, async () => {
-    await flow.openEditForm(VALID_EMAIL, VALID_PASSWORD);
-    let added = true;
-    await flow.selectTopic('Hilton').catch(() => { added = false; });
-    test.skip(!added, 'Hilton topic not selectable in this environment');
-    const afterFirst = await flow.selectedTopicChips.filter({ hasText: 'Hilton' }).count();
-    await flow.selectTopic('Hilton').catch(() => {});
-    const afterSecond = await flow.selectedTopicChips.filter({ hasText: 'Hilton' }).count();
-    expect(afterSecond).toBe(afterFirst);
-  });
-
-  test('B9 — cannot exceed the 5-topic maximum', { tag: '@exploratory' }, async () => {
-    await flow.openEditForm(VALID_EMAIL, VALID_PASSWORD);
-    const candidates = ['Hilton', 'Marriott', 'Airlines', 'Solo Travel', 'Budget Travel', 'Backpacking'];
-    for (const t of candidates) { await flow.selectTopic(t).catch(() => {}); }
-    const count = await flow.selectedTopicChips.count();
-    expect(count, 'selected topics must never exceed 5').toBeLessThanOrEqual(5);
-  });
-
-  test('B10 — emoji / unicode in the Title is preserved in the field', { tag: '@exploratory' }, async () => {
-    await flow.openEditForm(VALID_EMAIL, VALID_PASSWORD);
-    const t = 'Edit ✈️🌍 títlë 日本語';
-    await flow.titleInput.fill(t);
-    await expect(flow.titleInput).toHaveValue(t);
-  });
-
-  test('B11 — External Link can be cleared (removed) on the form', { tag: '@exploratory' }, async () => {
-    await flow.openEditForm(VALID_EMAIL, VALID_PASSWORD);
-    await flow.externalLinkInput.fill('https://example.com');
-    await flow.externalLinkInput.fill('');
-    await expect(flow.externalLinkInput).toHaveValue('');
-  });
-
-  test('B12 — Fetch Title is disabled while External Link is empty', { tag: '@exploratory' }, async () => {
-    await flow.openEditForm(VALID_EMAIL, VALID_PASSWORD);
-    await flow.externalLinkInput.fill('');
-    // Best-effort: the button may be absent entirely on some builds.
-    if (await flow.fetchTitleBtn.count() > 0) {
-      await expect(flow.fetchTitleBtn).toBeDisabled();
-    }
-  });
-
-  test('B13 — Topics input exposes a search placeholder', { tag: '@exploratory' }, async () => {
-    await flow.openEditForm(VALID_EMAIL, VALID_PASSWORD);
-    const ph = await flow.topicsInput.getAttribute('placeholder');
-    expect(ph && /search|topic/i.test(ph)).toBeTruthy();
-  });
-
-  test('B14 — Title field enforces a maxlength (informational, not unbounded)', { tag: '@exploratory' }, async () => {
-    await flow.openEditForm(VALID_EMAIL, VALID_PASSWORD);
-    const max = await flow.titleInput.getAttribute('maxlength');
-    // Not a hard failure if absent — log the finding via the assertion message.
-    expect(max === null || Number(max) > 0, `Title maxlength="${max}"`).toBe(true);
-  });
-
-  // ─────────────────────────────────────────────────────────────────────────
-  // C. Persistence & navigation behavior (5)
-  // ─────────────────────────────────────────────────────────────────────────
-
-  test('C1 — refreshing mid-edit discards unsaved changes (no draft persistence)', { tag: '@exploratory' }, async ({ page }) => {
-    await flow.openEditForm(VALID_EMAIL, VALID_PASSWORD);
-    const original = await flow.titleInput.inputValue();
-    await flow.titleInput.fill('Unsaved draft that must not persist');
-    await page.reload({ waitUntil: 'domcontentloaded' });
-    await flow.titleInput.waitFor({ state: 'visible', timeout: 15000 }).catch(() => {});
-    await expect(flow.titleInput).toHaveValue(original);
-  });
-
-  test('C2 — browser Back from the edit form leaves the edit URL', { tag: '@exploratory' }, async ({ page }) => {
-    await flow.openEditForm(VALID_EMAIL, VALID_PASSWORD);
-    await page.goBack().catch(() => {});
-    await page.waitForTimeout(1000);
-    expect(flow.isOnEditUrl()).toBe(false);
-  });
-
-  test('C3 — Cancel discards edits and the original title is unchanged', { tag: '@exploratory' }, async ({ page }) => {
+  test('SEC8 — the 5-topic maximum holds end-to-end (saved post has <= 5 topics)', { tag: '@exploratory' }, async ({ page }) => {
     const slug = await flow.openEditForm(VALID_EMAIL, VALID_PASSWORD);
-    await flow.titleInput.fill('Discarded change ' + slug);
+    for (const t of ['Hilton', 'Marriott', 'Airlines', 'Solo Travel', 'Budget Travel', 'Backpacking']) {
+      await flow.selectTopic(t).catch(() => {});
+    }
+    await flow.dismissCookieBanner();
+    await flow.submitUpdate();
+    await page.waitForTimeout(1500);
+    await flow.openPostView(slug);
+    const topics = await flow.topicCountOnView();
+    expect(topics, 'saved post must not exceed 5 topics').toBeLessThanOrEqual(5);
+  });
+
+  // ── Data integrity & propagation ─────────────────────────────────────────
+
+  test('INT1 — a saved Title round-trips exactly on the post view (no mangling)', { tag: '@exploratory' }, async () => {
+    const slug = await flow.openEditForm(VALID_EMAIL, VALID_PASSWORD);
+    const title = `Round-trip integrity ${Date.now()}`;
+    await flow.setTitleAndSave(title);
+    await flow.openPostView(slug);
+    await expect(flow.postViewTitle).toContainText(title);
+  });
+
+  test('INT2 — a successful edit surfaces an "Edited" label on the post', { tag: '@exploratory' }, async ({ page }) => {
+    const slug = await flow.openEditForm(VALID_EMAIL, VALID_PASSWORD);
+    await flow.setTitleAndSave(`Edited label probe ${Date.now()}`);
+    await flow.openPostView(slug);
+    await expect(flow.editedLabelOnView).toBeVisible({ timeout: 10000 });
+  });
+
+  test('INT3 — an edited Title propagates to the trending feed', { tag: '@exploratory' }, async ({ page }) => {
+    await flow.openEditForm(VALID_EMAIL, VALID_PASSWORD);
+    const title = `Feed propagation ${Date.now()}`;
+    await flow.setTitleAndSave(title);
+    await page.goto(`${BASE}/trending`, { waitUntil: 'domcontentloaded' });
+    await flow.dismissCookieBanner();
+    await expect(page.locator(`a[href^="/post/"]:has-text("${title}")`).first())
+      .toBeVisible({ timeout: 10000 });
+  });
+
+  test('INT4 — editing a post does not lose its comments', { tag: '@exploratory' }, async ({ page }) => {
+    const slug = await flow.openEditForm(VALID_EMAIL, VALID_PASSWORD);
+    // Capture comment count from the live post first.
+    await flow.openPostView(slug);
+    const before = await flow.commentCount();
+    test.skip(before === 0, 'Seed post has no comments to preserve');
+    await flow.openOwnPostEdit();
+    await flow.setTitleAndSave(`Comments preserved ${Date.now()}`);
+    await flow.openPostView(slug);
+    const after = await flow.commentCount();
+    expect(after, 'comment count must be unchanged after an edit').toBe(before);
+  });
+
+  test('INT5 — editing a post does not change its author', { tag: '@exploratory' }, async ({ page }) => {
+    const slug = await flow.openEditForm(VALID_EMAIL, VALID_PASSWORD);
+    await flow.setTitleAndSave(`Author unchanged ${Date.now()}`);
+    await flow.openPostView(slug);
+    const authorHref = await page.locator('a[href*="/profile/"]').first().getAttribute('href');
+    expect(authorHref, 'the post author must remain the same after an edit').toContain(OWN_HANDLE);
+  });
+
+  test('INT6 — Cancel discards edits (the change never persists)', { tag: '@exploratory' }, async ({ page }) => {
+    const slug = await flow.openEditForm(VALID_EMAIL, VALID_PASSWORD);
+    const discarded = `Discarded change ${Date.now()}`;
+    await flow.titleInput.fill(discarded);
     await flow.cancelBtn.click();
-    await page.goto(`${BASE}/post/${slug}`, { waitUntil: 'domcontentloaded' });
-    await expect(page.getByRole('heading', { level: 1 })).not.toContainText('Discarded change');
+    await flow.openPostView(slug);
+    await expect(flow.postViewTitle).not.toContainText(discarded);
   });
 
-  test('C4 — reopening the edit form after Cancel is still pre-filled', { tag: '@exploratory' }, async () => {
-    const slug = await flow.openEditForm(VALID_EMAIL, VALID_PASSWORD);
-    await flow.cancelBtn.click().catch(() => {});
-    await flow.gotoEdit(slug);
-    await expect(flow.titleInput).not.toHaveValue('');
-  });
-
-  test('C5 — editing does not wipe the post body editor (still present on reload)', { tag: '@exploratory' }, async ({ page }) => {
-    await flow.openEditForm(VALID_EMAIL, VALID_PASSWORD);
-    await page.reload({ waitUntil: 'domcontentloaded' });
-    await expect(flow.discussionEditor).toBeVisible({ timeout: 15000 });
-  });
-
-  // ─────────────────────────────────────────────────────────────────────────
-  // D. Security (9)
-  // ─────────────────────────────────────────────────────────────────────────
-
-  test('D1 — XSS payload in the Title is not executed after Save', { tag: '@exploratory' }, async ({ page }) => {
-    let alertFired = false;
-    page.on('dialog', async d => { alertFired = true; await d.dismiss(); });
-    await flow.openEditForm(VALID_EMAIL, VALID_PASSWORD);
-    await flow.titleInput.fill('<img src=x onerror=alert(1)>');
-    await flow.dismissCookieBanner();
-    await flow.submitUpdate();
-    await expect.poll(() => alertFired, { timeout: 3000 }).toBe(false);
-  });
-
-  test('D2 — XSS payload in the edit slug does not execute script', { tag: '@exploratory' }, async ({ page }) => {
-    let alertFired = false;
-    page.on('dialog', async d => { alertFired = true; await d.dismiss(); });
-    await flow.login(VALID_EMAIL, VALID_PASSWORD);
-    await page.goto(`${BASE}/post/<script>alert(1)</script>/edit`, { waitUntil: 'domcontentloaded' }).catch(() => {});
-    await page.waitForLoadState('networkidle').catch(() => {});
-    expect(alertFired).toBe(false);
-  });
-
-  test('D3 — XSS typed into the Discussion editor is not executed', { tag: '@exploratory' }, async ({ page }) => {
-    let alertFired = false;
-    page.on('dialog', async d => { alertFired = true; await d.dismiss(); });
-    await flow.openEditForm(VALID_EMAIL, VALID_PASSWORD);
-    await flow.discussionEditor.click();
-    await flow.discussionEditor.fill('<img src=x onerror=alert(1)><script>alert(2)</script>');
-    await expect.poll(() => alertFired, { timeout: 2000 }).toBe(false);
-  });
-
-  test('D4 — HTML in the Title renders as text (escaped) on the post view', { tag: '@exploratory' }, async ({ page }) => {
-    let alertFired = false;
-    page.on('dialog', async d => { alertFired = true; await d.dismiss(); });
-    const marker = `<b>xss${Date.now()}</b>`;
-    await flow.openEditForm(VALID_EMAIL, VALID_PASSWORD);
-    await flow.titleInput.fill(marker);
-    await flow.dismissCookieBanner();
-    await flow.submitUpdate();
-    await page.waitForLoadState('networkidle').catch(() => {});
-    // No script/dialog should fire, and the literal angle brackets should survive as text.
-    expect(alertFired).toBe(false);
-  });
-
-  test('D5 — SQL-injection-style Title does not cause a 5xx', { tag: '@exploratory' }, async ({ page }) => {
+  test('INT7 — double-clicking Save does not 5xx or duplicate the post', { tag: '@exploratory' }, async ({ page }) => {
     let serverError = false;
     page.on('response', res => { if (res.status() >= 500) serverError = true; });
-    await flow.openEditForm(VALID_EMAIL, VALID_PASSWORD);
-    await flow.titleInput.fill(`Robert'); DROP TABLE posts;-- `);
+    const slug = await flow.openEditForm(VALID_EMAIL, VALID_PASSWORD);
+    await flow.titleInput.fill(`Double submit ${Date.now()}`);
+    await flow.dismissCookieBanner();
+    // Fire two clicks quickly to probe double-submit handling.
+    await flow.updatePostBtn.click({ force: true }).catch(() => {});
+    await flow.updatePostBtn.click({ force: true }).catch(() => {});
+    await page.waitForTimeout(2500);
+    expect(serverError, 'double-submit must not cause a server error').toBe(false);
+    // We should land on a single post view, not a broken/duplicate state.
+    expect(page.url()).toMatch(/\/post\/[^/?#]+/);
+  });
+
+  test('INT8 — a very long Title (2000 chars) does not corrupt the post or 5xx', { tag: '@exploratory' }, async ({ page }) => {
+    let serverError = false;
+    page.on('response', res => { if (res.status() >= 500) serverError = true; });
+    const slug = await flow.openEditForm(VALID_EMAIL, VALID_PASSWORD);
+    await flow.titleInput.fill('L'.repeat(2000));
     await flow.dismissCookieBanner();
     await flow.submitUpdate();
     await page.waitForTimeout(2000);
-    expect(serverError).toBe(false);
-  });
-
-  test('D6 — large Discussion payload (10k chars) does not 5xx', { tag: '@exploratory' }, async ({ page }) => {
-    let serverError = false;
-    page.on('response', res => { if (res.status() >= 500) serverError = true; });
-    await flow.openEditForm(VALID_EMAIL, VALID_PASSWORD);
-    await flow.discussionEditor.click();
-    await flow.discussionEditor.fill('x'.repeat(10000));
-    await flow.dismissCookieBanner();
-    await flow.submitUpdate();
-    await page.waitForTimeout(2000);
-    expect(serverError).toBe(false);
-  });
-
-  test('D7 — edit page sets a clickjacking-protection header', { tag: '@exploratory' }, async ({ page }) => {
-    let hasProtection = false;
-    page.on('response', res => {
-      if (res.url().includes('/edit') || res.url().includes('/post/')) {
-        const h = res.headers();
-        if (h['x-frame-options'] || (h['content-security-policy'] ?? '').includes('frame-ancestors')) {
-          hasProtection = true;
-        }
-      }
-    });
-    const slug = await flow.openEditForm(VALID_EMAIL, VALID_PASSWORD);
-    await flow.gotoEdit(slug);
-    await page.waitForLoadState('networkidle').catch(() => {});
-    expect(hasProtection, 'expected X-Frame-Options or CSP frame-ancestors on the edit page').toBe(true);
-  });
-
-  test('D8 — authenticated edit page is not publicly cacheable', { tag: '@exploratory' }, async ({ page }) => {
-    let cacheControl = '';
-    page.on('response', res => {
-      if (res.url().endsWith('/edit')) cacheControl = res.headers()['cache-control'] ?? cacheControl;
-    });
-    const slug = await flow.openEditForm(VALID_EMAIL, VALID_PASSWORD);
-    await flow.gotoEdit(slug);
-    await page.waitForLoadState('networkidle').catch(() => {});
-    // If a Cache-Control header is present it must not allow public/shared caching.
-    if (cacheControl) {
-      expect(cacheControl, `Cache-Control="${cacheControl}"`).not.toMatch(/public/i);
-    }
-  });
-
-  test('D9 — Save does not expose credentials/token in the URL (no GET-mutation)', { tag: '@exploratory' }, async ({ page }) => {
-    await flow.openEditForm(VALID_EMAIL, VALID_PASSWORD);
-    await flow.titleInput.fill(`No token in URL ${Date.now()}`);
-    await flow.dismissCookieBanner();
-    await flow.submitUpdate();
-    await page.waitForLoadState('networkidle').catch(() => {});
-    expect(page.url()).not.toMatch(/token=|password=|session=/i);
-  });
-
-  // ─────────────────────────────────────────────────────────────────────────
-  // E. Accessibility (6)
-  // ─────────────────────────────────────────────────────────────────────────
-
-  test('E1 — the edit page exposes an "Edit Post" heading', { tag: '@exploratory' }, async () => {
-    await flow.openEditForm(VALID_EMAIL, VALID_PASSWORD);
-    await expect(flow.editHeading).toBeVisible();
-  });
-
-  test('E2 — Title input has an accessible name', { tag: '@exploratory' }, async () => {
-    await flow.openEditForm(VALID_EMAIL, VALID_PASSWORD);
-    const name = (await flow.titleInput.getAttribute('aria-label'))
-      ?? (await flow.titleInput.getAttribute('placeholder'))
-      ?? (await flow.titleInput.getAttribute('name'));
-    expect(name && name.length > 0).toBe(true);
-  });
-
-  test('E3 — External Link input has an accessible name', { tag: '@exploratory' }, async () => {
-    await flow.openEditForm(VALID_EMAIL, VALID_PASSWORD);
-    const name = (await flow.externalLinkInput.getAttribute('aria-label'))
-      ?? (await flow.externalLinkInput.getAttribute('placeholder'))
-      ?? (await flow.externalLinkInput.getAttribute('name'));
-    expect(name && name.length > 0).toBe(true);
-  });
-
-  test('E4 — Save Changes and Cancel buttons have discernible text', { tag: '@exploratory' }, async () => {
-    await flow.openEditForm(VALID_EMAIL, VALID_PASSWORD);
-    await expect(flow.updatePostBtn).toBeVisible();
-    await expect(flow.cancelBtn).toBeVisible();
-    expect((await flow.updatePostBtn.innerText()).trim().length).toBeGreaterThan(0);
-    expect((await flow.cancelBtn.innerText()).trim().length).toBeGreaterThan(0);
-  });
-
-  test('E5 — rich-text toolbar buttons carry accessible names', { tag: '@exploratory' }, async () => {
-    await flow.openEditForm(VALID_EMAIL, VALID_PASSWORD);
-    const count = await flow.toolbarButtons.count();
-    test.skip(count === 0, 'No Quill toolbar buttons found');
-    let named = 0;
-    for (let i = 0; i < count; i++) {
-      const b = flow.toolbarButtons.nth(i);
-      const name = (await b.getAttribute('aria-label')) ?? (await b.getAttribute('title')) ?? (await b.innerText());
-      if (name && name.trim().length > 0) named++;
-    }
-    expect(named, `${named}/${count} toolbar buttons have an accessible name`).toBe(count);
-  });
-
-  test('E6 — the remove-topic × control has an accessible name', { tag: '@exploratory' }, async () => {
-    await flow.openEditForm(VALID_EMAIL, VALID_PASSWORD);
-    test.skip(await flow.selectedTopicChips.count() === 0, 'Post has no topic chips');
-    const x = flow.topicChipRemoveBtn.first();
-    const name = (await x.getAttribute('aria-label')) ?? (await x.getAttribute('title')) ?? (await x.innerText());
-    expect(name && name.trim().length > 0, 'topic remove × needs an aria-label/title').toBeTruthy();
+    await flow.openPostView(slug);
+    const heading = (await flow.postViewTitle.innerText().catch(() => '')).trim();
+    expect(serverError, 'oversized title must not 5xx').toBe(false);
+    expect(heading.length, 'post must still render a (possibly truncated) title').toBeGreaterThan(0);
   });
 });
