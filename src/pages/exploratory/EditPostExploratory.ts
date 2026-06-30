@@ -52,18 +52,26 @@ export class EditPostExploratoryPage extends EditPostPage {
   }
 
   /**
-   * Open the first trending post that is NOT authored by the test account and
-   * return its slug, or '' if none could be found.
+   * Scan the trending feed and open the first post NOT authored by the test
+   * account; returns its slug (we end up on that post's view), or '' if none
+   * is found after checking several candidates.
    */
   async openForeignPostSlug(): Promise<string> {
-    await this.openFirstPost();
-    const authorHref = await this.page
-      .locator('a[href*="/profile/"]')
-      .first()
-      .getAttribute('href')
-      .catch(() => null);
-    const slug = this.currentPostSlug();
-    if (authorHref && !authorHref.includes(OWN_HANDLE)) return slug;
+    await this.page.goto('https://staging.talktravel.com/trending', { waitUntil: 'domcontentloaded' });
+    await this.dismissCookieBanner();
+    const links = this.page.locator('a[href^="/post/"]:not([href*="/-"])').filter({ visible: true });
+    await links.first().waitFor({ state: 'visible', timeout: 20000 }).catch(() => {});
+    const hrefs = (await links.evaluateAll(els =>
+      els.map(e => (e as HTMLAnchorElement).getAttribute('href')).filter((h): h is string => !!h)
+    ));
+    const unique = [...new Set(hrefs)].slice(0, 10);
+    for (const href of unique) {
+      await this.page.goto(`https://staging.talktravel.com${href}`, { waitUntil: 'domcontentloaded' });
+      await this.page.waitForLoadState('networkidle', { timeout: 15000 }).catch(() => {});
+      const authorHref = await this.page
+        .locator('a[href*="/profile/"]').first().getAttribute('href').catch(() => null);
+      if (authorHref && !authorHref.includes(OWN_HANDLE)) return this.currentPostSlug();
+    }
     return '';
   }
 

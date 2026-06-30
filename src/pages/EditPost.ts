@@ -111,9 +111,16 @@ export class EditPostPage extends PostLoginSinglePostViewPage {
    */
   async openOwnPostEdit(): Promise<void> {
     await this.goToMyPosts();
-    const firstOwnPost = this.page.locator('a[href^="/post/"]').first();
-    await firstOwnPost.waitFor({ state: 'visible', timeout: 15000 });
-    await firstOwnPost.click();
+    // Pick the first *visible* real post link. The My Posts list renders hidden
+    // skeleton placeholders first (e.g. href="/post/-10", class
+    // "feed-post-title-link") — blindly taking .first() grabs one of those and
+    // waits forever for it to become visible. Exclude the negative-slug
+    // skeletons and require visibility.
+    const firstOwnPost = this.page
+      .locator('a[href^="/post/"]:not([href*="/-"])')
+      .filter({ visible: true })
+      .first();
+    await firstOwnPost.click();   // auto-waits for actionable
     await this.page.waitForURL('**/post/**', { timeout: 30000 });
     const opened = await this.openEditFromSinglePost();
     if (!opened) {
