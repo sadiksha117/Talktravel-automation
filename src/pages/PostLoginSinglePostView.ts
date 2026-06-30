@@ -125,9 +125,15 @@ export class PostLoginSinglePostViewPage extends BasePage {
       }
     }
     await this.dismissCookieBanner();
-    const firstCard = this.page.locator('a[href^="/post/"]:has(div)').first();
-    await firstCard.waitFor({ state: 'visible' });
-    await firstCard.click();
+
+    // Pick the first *visible* post card, not blindly the first DOM match —
+    // the lead feed card can be a title-less image post whose <a> renders hidden.
+    const firstCard = this.page
+      .locator('a[href^="/post/"]')
+      .filter({ visible: true })
+      .first();
+
+    await firstCard.click();           // auto-waits for actionable; no separate waitFor needed
     await this.page.waitForURL('**/post/**', { timeout: 30000 });
     // Wait for full React/auth hydration so Quill switches to contenteditable="true"
     await this.page.waitForLoadState('networkidle', { timeout: 30000 }).catch(() => {});

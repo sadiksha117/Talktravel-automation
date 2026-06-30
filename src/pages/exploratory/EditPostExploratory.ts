@@ -82,4 +82,26 @@ export class EditPostExploratoryPage extends EditPostPage {
   async topicCountOnView(): Promise<number> {
     return await this.page.locator('a[href*="/tags/"]').count();
   }
+
+  /** Set the External Link and submit. */
+  async setExternalLinkAndSave(url: string): Promise<void> {
+    await this.externalLinkInput.fill(url);
+    await this.dismissCookieBanner();
+    await this.submitUpdate();
+    await this.page.waitForURL(/\/post\/[^/?#]+$/, { timeout: 15000 }).catch(() => {});
+  }
+
+  /** Set the Discussion body and submit. */
+  async setDiscussionAndSave(text: string): Promise<void> {
+    await this.discussionEditor.click();
+    await this.discussionEditor.fill(text);
+    await this.dismissCookieBanner();
+    await this.submitUpdate();
+    await this.page.waitForURL(/\/post\/[^/?#]+$/, { timeout: 15000 }).catch(() => {});
+  }
+
+  /** Relative "… ago" timestamp shown in the post header (or '' if absent). */
+  async postDateText(): Promise<string> {
+    return (await this.page.getByText(/\bago\b/i).first().innerText().catch(() => '')).trim();
+  }
 }
