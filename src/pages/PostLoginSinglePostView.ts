@@ -125,15 +125,19 @@ export class PostLoginSinglePostViewPage extends BasePage {
       }
     }
     await this.dismissCookieBanner();
+    // Let the feed render before probing for cards.
+    await this.page.waitForLoadState('networkidle', { timeout: 15000 }).catch(() => {});
 
-    // Pick the first *visible* post card, not blindly the first DOM match —
-    // the lead feed card can be a title-less image post whose <a> renders hidden.
+    // Don't blindly take the first DOM match: the lead feed card can be a
+    // hidden placeholder (e.g. href="/post/-10") or a title-less image post
+    // whose <a> renders hidden, which makes wait-for-visible time out. Pick the
+    // first VISIBLE post card whose slug is a real (non-negative) id.
     const firstCard = this.page
-      .locator('a[href^="/post/"]')
+      .locator('a[href^="/post/"]:not([href^="/post/-"])')
       .filter({ visible: true })
       .first();
-
-    await firstCard.click();           // auto-waits for actionable; no separate waitFor needed
+    await firstCard.scrollIntoViewIfNeeded();
+    await firstCard.click();           // auto-waits for actionable
     await this.page.waitForURL('**/post/**', { timeout: 30000 });
     // Wait for full React/auth hydration so Quill switches to contenteditable="true"
     await this.page.waitForLoadState('networkidle', { timeout: 30000 }).catch(() => {});
