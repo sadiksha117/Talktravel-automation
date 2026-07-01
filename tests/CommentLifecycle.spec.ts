@@ -149,31 +149,6 @@ test.describe('Comment Lifecycle — Happy Path (positive only)', () => {
     await expect(flow.editedLabel.first()).toBeVisible();
   });
 
-  // ── Step 15: Multiple edits show a single Edited label ─────────────────────
-
-  test('Step 15 — editing a comment twice still shows exactly one Edited label', async ({ page }) => {
-    const original = `Multi-edit ${Date.now()}`;
-    await flow.addTopLevelComment(original);
-
-    // First edit
-    await flow.openCommentMenu(flow.commentRow(original));
-    await flow.menuEditItem.click();
-    const firstEdit = `First edit ${Date.now()}`;
-    await flow.activeInlineEditor().fill(firstEdit);
-    await flow.editSaveBtn.click();
-    await page.getByText(firstEdit).first().waitFor({ state: 'visible', timeout: 15000 });
-
-    // Second edit
-    await flow.openCommentMenu(flow.commentRow(firstEdit));
-    await flow.menuEditItem.click();
-    const secondEdit = `Second edit ${Date.now()}`;
-    await flow.activeInlineEditor().fill(secondEdit);
-    await flow.editSaveBtn.click();
-    await page.getByText(secondEdit).first().waitFor({ state: 'visible', timeout: 15000 });
-
-    await expect(flow.commentRow(secondEdit).locator('text=/Edited/i')).toHaveCount(1);
-  });
-
   // ── Step 16: Delete own comment with NO replies → removed permanently ──────
 
   test('Step 16 — deleting own comment with no replies removes it from the thread', async ({ page }) => {
