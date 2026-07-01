@@ -143,4 +143,64 @@ export class EditPostExploratoryPage extends EditPostPage {
   async postDateText(): Promise<string> {
     return (await this.page.getByText(/\bago\b/i).first().innerText().catch(() => '')).trim();
   }
+
+  /** Author profile href on the current post view (or null). */
+  async postAuthorHref(): Promise<string | null> {
+    return this.page.locator('a[href*="/profile/"]').first().getAttribute('href').catch(() => null);
+  }
+
+  /** True if a post with the given title is listed in My Posts. */
+  async isInMyPosts(title: string): Promise<boolean> {
+    await this.goToMyPosts();
+    return (await this.page.locator(`a[href^="/post/"]:has-text("${title}")`).count()) > 0;
+  }
+
+  /**
+   * From the edit form, fill a new Title, submit, and capture the mutating
+   * (PUT/PATCH/POST) network request the app fires. Returns null if none could
+   * be identified, so callers can fall back to a UI-level assertion instead of
+   * skipping.
+   */
+  async captureUpdateRequest(newTitle: string): Promise<CapturedRequest | null> {
+    const reqP = this.page.waitForRequest(r => {
+      const m = r.method().toUpperCase();
+      if (m === 'GET' || m === 'OPTIONS' || m === 'HEAD') return false;
+      const u = r.url().toLowerCase();
+      if (/(login|auth|comment|vote|upload|image|analytics|track|telemetry|log|sentry)/.test(u)) return false;
+      return /post|article|blog/.test(u);
+    }, { timeout: 15000 }).catch(() => null);
+    await this.titleInput.fill(newTitle);
+    await this.submitUpdate();
+    const req = await reqP;
+    if (!req) return null;
+    return { url: req.url(), method: req.method(), headers: req.headers(), body: req.postData() ?? null };
+  }
+
+  /**
+   * Replay a captured update request via the page's APIRequestContext (which
+   * shares the browser's cookies). Pass `data` to override the body and
+   * `extraHeaders` to add/override headers. Returns the HTTP status.
+   */
+  async replayUpdate(req: CapturedRequest, data?: string | null, extraHeaders?: Record<string, string>): Promise<number> {
+    const headers: Record<string, string> = {};
+    for (const [k, v] of Object.entries({ ...req.headers, ...(extraHeaders ?? {}) })) {
+      const lk = k.toLowerCase();
+      if (lk === 'content-length' || lk === 'host' || lk.startsWith(':')) continue;
+      headers[k] = v;
+    }
+    const res = await this.page.request.fetch(req.url, {
+      method: req.method,
+      headers,
+      data: data ?? req.body ?? undefined,
+      failOnStatusCode: false,
+    });
+    return res.status();
+  }
+}
+
+export interface CapturedRequest {
+  url: string;
+  method: string;
+  headers: Record<string, string>;
+  body: string | null;
 }
