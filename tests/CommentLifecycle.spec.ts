@@ -21,13 +21,10 @@ const VALID_PASSWORD = 'Admin@123';
 test.describe('Comment Lifecycle — Happy Path (positive only)', () => {
   let flow: CommentLifecyclePage;
 
-  // Run serially in a single worker. Each test logs in fresh (required — the
-  // comment editor's auth token isn't captured by storageState), and this app's
-  // single shared account invalidates a session whenever another login occurs.
-  // Serial execution guarantees logins never overlap, so no test gets bumped to
-  // the "Please login" placeholder mid-run.
-  test.describe.configure({ mode: 'serial' });
-
+  // NOT serial: a single flaky test must fail on its own, never skip the rest.
+  // Concurrency is capped to 1 worker via playwright.config (workers: 1) so the
+  // shared account never sees overlapping logins that invalidate each other,
+  // and getCommentInput() self-heals the odd hydration race with a reload.
   test.setTimeout(180000);
 
   test.beforeEach(async ({ page }) => {

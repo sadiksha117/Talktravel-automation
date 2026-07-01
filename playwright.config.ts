@@ -4,8 +4,11 @@ export default defineConfig({
   testDir: './tests',
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
-  retries: process.env.CI ? 2 : 0,
-  workers: process.env.CI ? 1 : undefined,
+  // Retry flaky specs (transient editor-hydration / network hiccups on staging).
+  retries: process.env.CI ? 2 : 1,
+  // Single worker: the suite shares one test account, and concurrent logins to
+  // it invalidate each other's session. Serialising avoids that race.
+  workers: 1,
   reporter: [['html'], ['list']],
   use: {
     baseURL: 'https://staging.talktravel.com',

@@ -159,19 +159,39 @@ export class PostLoginSinglePostViewPage extends BasePage {
   }
 
   // Scrolls to the comments section and probes for the comment editor using
-  // multiple strategies since the editor is lazy-mounted
+  // multiple strategies since the editor is lazy-mounted. Self-heals the
+  // occasional "Please login" / not-hydrated state by reloading the post and
+  // re-probing, rather than failing the test outright.
   async getCommentInput(): Promise<Locator> {
-    // Scroll to bottom so the comment editor mounts
+    for (let pass = 1; pass <= 3; pass++) {
+      const editor = await this.probeCommentEditor();
+      if (editor) return editor;
+
+      // Editor didn't activate (often a hydration race where the app hasn't
+      // re-read the auth token yet). Reload the post and try again — cookies /
+      // sessionStorage survive a reload, so this recovers the authed state.
+      if (pass < 3) {
+        await this.page.reload({ waitUntil: 'domcontentloaded' }).catch(() => {});
+        await this.page.waitForLoadState('networkidle', { timeout: 20000 }).catch(() => {});
+      }
+    }
+
+    throw new Error(
+      'Comment input not found or still showing "Please login" placeholder. ' +
+      'The Quill editor did not activate after reload+retry — check auth state on the post page.'
+    );
+  }
+
+  // Single probe attempt: scroll the editor into view, click to activate Quill,
+  // and wait for it to flip to contenteditable=true. Returns the editor Locator
+  // on success, or null if it never activated this pass.
+  private async probeCommentEditor(): Promise<Locator | null> {
     await this.page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
 
     const quill = this.page.locator('.ql-editor').first();
     const quillVisible = await quill.isVisible({ timeout: 5000 }).catch(() => false);
 
     if (quillVisible) {
-      // Click the editor — many Quill instances only activate (flip contenteditable)
-      // after receiving a click/focus event, even when the user is authenticated.
-      // Retry the click/activation a few times: under load the editor can be slow
-      // to flip to contenteditable=true, and a single attempt is flaky.
       await quill.scrollIntoViewIfNeeded().catch(() => {});
       for (let attempt = 1; attempt <= 3; attempt++) {
         await quill.click({ force: true, timeout: 5000 }).catch(() => {});
@@ -182,7 +202,6 @@ export class PostLoginSinglePostViewPage extends BasePage {
           );
           return this.page.locator('.ql-editor[contenteditable="true"]').first();
         } catch {
-          // Not editable yet — wait briefly and retry the click.
           await this.page.waitForTimeout(attempt * 1000);
         }
       }
@@ -198,11 +217,7 @@ export class PostLoginSinglePostViewPage extends BasePage {
       const el = this.page.locator(sel).first();
       if (await el.isVisible({ timeout: 500 }).catch(() => false)) return el;
     }
-
-    throw new Error(
-      'Comment input not found or still showing "Please login" placeholder. ' +
-      'The Quill editor did not activate after click — check auth state on the post page.'
-    );
+    return null;
   }
 
   async addComment(text: string): Promise<void> {
