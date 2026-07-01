@@ -210,17 +210,10 @@ test.describe('Comment Lifecycle — Happy Path (positive only)', () => {
   });
 
   // ── Step 20: Comment earns Jetfuel ─────────────────────────────────────────
-  // Jetfuel is eventually consistent, so we assert it does not decrease after
-  // posting (a strict +2 equality would flake on a shared account).
+  // Posting a comment surfaces a "+2 Jetfuel" reward confirmation.
 
-  test('Step 20 — posting a comment does not decrease the user Jetfuel balance', async ({ page }) => {
-    const jetfuel = page.locator('[class*="jetfuel" i]').or(page.getByText(/jetfuel/i)).first();
-    const read = async () => parseInt((await jetfuel.textContent())?.replace(/\D/g, '') || '0', 10);
-
-    const before = await read();
+  test('Step 20 — posting a comment shows the +2 Jetfuel reward', async () => {
     await flow.addTopLevelComment(`Jetfuel ${Date.now()}`);
-    await page.waitForTimeout(1000);
-
-    expect(await read()).toBeGreaterThanOrEqual(before);
+    await expect(flow.jetfuelReward()).toBeVisible({ timeout: 15000 });
   });
 });

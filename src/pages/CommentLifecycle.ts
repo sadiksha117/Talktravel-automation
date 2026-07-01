@@ -48,15 +48,16 @@ export class CommentLifecyclePage extends PostLoginSinglePostViewPage {
     this.commentDownvoteBtn = page.locator('button[data-action="downvote"]').nth(1);
     this.commentShareBtn    = page.getByRole('button', { name: /share/i }).nth(1);
 
-    this.menuEditItem   = page.getByRole('menuitem', { name: /edit/i })
-      .or(page.locator('[role="menuitem"]:has-text("Edit")')).first();
-    this.menuDeleteItem = page.getByRole('menuitem', { name: /delete/i })
-      .or(page.locator('[role="menuitem"]:has-text("Delete")')).first();
+    // The 3-dot menu items are BUTTONS named "Edit Reply" / "Delete Reply"
+    // (confirmed via codegen), not role=menuitem. Match the leading verb so it
+    // works for both comments and replies.
+    this.menuEditItem   = page.getByRole('button', { name: /^edit(\s|$)/i }).first();
+    this.menuDeleteItem = page.getByRole('button', { name: /^delete(\s|$)/i }).first();
 
-    this.editSaveBtn      = page.getByRole('button', { name: /save|update|done/i }).first();
+    // Save is labelled "Update"; the delete confirmation button is "Remove".
+    this.editSaveBtn      = page.getByRole('button', { name: /^(update|save)$/i }).first();
     this.deleteDialog     = page.getByRole('dialog');
-    this.deleteConfirmBtn = this.deleteDialog.getByRole('button', { name: /^delete$/i })
-      .or(page.locator('[role="dialog"] button:has-text("Delete")')).first();
+    this.deleteConfirmBtn = page.getByRole('button', { name: /^(remove|delete)$/i }).last();
     this.editedLabel      = page.locator('text=/Edited/i');
   }
 
@@ -112,8 +113,21 @@ export class CommentLifecyclePage extends PostLoginSinglePostViewPage {
     await this.page.getByText(text).first().waitFor({ state: 'visible', timeout: 15000 });
   }
 
-  /** Opens the 3-dot menu on the given comment row. */
+  /**
+   * Opens the 3-dot menu on the given comment row. The trigger is a react-aria
+   * menu button (aria-haspopup) with no stable id; fall back to a name match.
+   * The menu items (Edit Reply / Delete Reply) render in a body-level portal,
+   * so they are matched page-level, not inside the row.
+   */
   async openCommentMenu(row: Locator): Promise<void> {
-    await row.getByRole('button', { name: /more|options/i }).first().click();
+    const trigger = row.locator('button[aria-haspopup]')
+      .or(row.getByRole('button', { name: /more|option|menu/i }))
+      .first();
+    await trigger.click();
+  }
+
+  /** The "+2 Jetfuel" confirmation shown after posting a comment. */
+  jetfuelReward(): Locator {
+    return this.page.getByText(/\+\s*\d+\s*jetfuel/i).first();
   }
 }
