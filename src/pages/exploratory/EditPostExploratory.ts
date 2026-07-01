@@ -54,6 +54,30 @@ export class EditPostExploratoryPage extends EditPostPage {
     return this.currentPostSlug();
   }
 
+  /**
+   * Create a brand-new post via the Create Post flow so each test edits its own
+   * isolated post (no shared-state pollution). Returns the new post's slug.
+   * Requires an authenticated session (call login() first).
+   */
+  async createFreshPostForEditing(opts: { title: string; body?: string; topics?: string[] }): Promise<string> {
+    await this.page.goto(`${BASE}/create-post`, { waitUntil: 'domcontentloaded' });
+    await this.dismissCookieBanner();
+    await this.titleInput.waitFor({ state: 'visible', timeout: 20000 });
+    await this.titleInput.fill(opts.title);
+    if (opts.body) {
+      await this.discussionEditor.click();
+      await this.discussionEditor.fill(opts.body);
+    }
+    for (const topic of opts.topics ?? []) {
+      await this.selectTopic(topic).catch(() => {});
+    }
+    await this.dismissCookieBanner();
+    const publishBtn = this.page.getByRole('button', { name: /publish post|^publish$/i }).first();
+    await publishBtn.click({ force: true });
+    await this.page.waitForURL(/\/post\/[^/?#]+$/, { timeout: 20000 });
+    return this.currentPostSlug();
+  }
+
   /** True if the current page looks logged-out. */
   async isLoggedOut(): Promise<boolean> {
     if (/\/login/.test(this.page.url())) return true;

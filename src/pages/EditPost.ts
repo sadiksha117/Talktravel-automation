@@ -79,11 +79,20 @@ export class EditPostPage extends PostLoginSinglePostViewPage {
     return /\/post\/[^/?#]+\/edit/.test(this.page.url()) || /\/edit-post\//.test(this.page.url());
   }
 
-  /** Navigate directly to a post's edit form by slug. */
+  /**
+   * Open a post's edit form by slug. Tries the direct /post/{slug}/edit URL;
+   * if that doesn't render the form (owner-only, or the URL pattern differs),
+   * falls back to opening the post view and using the 3-dot Edit menu.
+   */
   async gotoEdit(slug: string): Promise<void> {
     await this.page.goto(`https://staging.talktravel.com/post/${slug}/edit`, {
       waitUntil: 'domcontentloaded',
     });
+    if (await this.titleInput.isVisible({ timeout: 6000 }).catch(() => false)) return;
+    // Fallback: post view + 3-dot Edit menu (only works for the owner).
+    await this.page.goto(`https://staging.talktravel.com/post/${slug}`, { waitUntil: 'domcontentloaded' }).catch(() => {});
+    await this.page.waitForLoadState('networkidle', { timeout: 10000 }).catch(() => {});
+    await this.openEditFromSinglePost().catch(() => {});
   }
 
   /**
