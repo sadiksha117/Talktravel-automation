@@ -1,10 +1,5 @@
 import { test, expect } from '@playwright/test';
 import { CommentLifecyclePage } from '../src/pages/CommentLifecycle';
-import { STORAGE_STATE } from '../src/authState';
-
-// Reuse the shared logged-in session (created once by the setup project) so the
-// worker pool never triggers concurrent logins that invalidate each other.
-test.use({ storageState: STORAGE_STATE });
 
 /**
  * Comment Lifecycle — POSITIVE (happy-path) suite.
@@ -20,14 +15,24 @@ test.use({ storageState: STORAGE_STATE });
  * object and use the locators confirmed against this app.
  */
 
+const VALID_EMAIL    = 'prempoudel72707@gmail.com';
+const VALID_PASSWORD = 'Admin@123';
+
 test.describe('Comment Lifecycle — Happy Path (positive only)', () => {
   let flow: CommentLifecyclePage;
+
+  // Run serially in a single worker. Each test logs in fresh (required — the
+  // comment editor's auth token isn't captured by storageState), and this app's
+  // single shared account invalidates a session whenever another login occurs.
+  // Serial execution guarantees logins never overlap, so no test gets bumped to
+  // the "Please login" placeholder mid-run.
+  test.describe.configure({ mode: 'serial' });
 
   test.setTimeout(180000);
 
   test.beforeEach(async ({ page }) => {
     flow = new CommentLifecyclePage(page);
-    // Already authenticated via storageState — go straight to a post.
+    await flow.login(VALID_EMAIL, VALID_PASSWORD);
     await flow.openFirstPost();
   });
 

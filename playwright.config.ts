@@ -18,26 +18,17 @@ export default defineConfig({
     video: 'on-first-retry',
   },
   projects: [
-    // Runs once before the browser projects; logs in and saves the shared
-    // session used by specs that opt in via test.use({ storageState }).
-    { name: 'setup', testMatch: /auth\.setup\.ts/ },
     {
       name: 'chromium',
       use: { ...devices['Desktop Chrome'] },
-      dependencies: ['setup'],
-      testIgnore: /auth\.setup\.ts/,
     },
     {
       name: 'firefox',
       use: { ...devices['Desktop Firefox'] },
-      dependencies: ['setup'],
-      testIgnore: /auth\.setup\.ts/,
     },
     {
       name: 'webkit',
       use: { ...devices['Desktop Safari'] },
-      dependencies: ['setup'],
-      testIgnore: /auth\.setup\.ts/,
     },
   ],
 });
