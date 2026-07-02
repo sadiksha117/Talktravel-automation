@@ -59,17 +59,12 @@ export class ReportPage extends PostLoginSinglePostViewPage {
   constructor(page: Page) {
     super(page);
 
-    // The card wrapper for each feed/topic-page post — one level up from the
-    // title link (confirmed via ARIA snapshot: the title link's parent is
-    // the same element whose computed accessible name includes "Post
-    // options"/"Follow this post" once hovered). Hovering/searching within
-    // the title link alone wouldn't find "Post options", since it's a
-    // sibling-level descendant of this wrapper, not of the title link.
-    // Excludes /post/-N (negative placeholder ids), same exclusion
-    // openFirstPost() already relies on for hidden/broken cards.
-    this.feedPostCards = page.locator('a[href^="/post/"]:not([href^="/post/-"])')
-      .filter({ visible: true })
-      .locator('xpath=..');
+    // Title link of each feed/topic-page card — confirmed real <a href="/post/...">
+    // via ARIA snapshot. Excludes /post/-N (negative placeholder ids), same
+    // exclusion openFirstPost() already relies on for hidden/broken cards.
+    // (Deliberately NOT climbing to a "card wrapper" here — see
+    // findReportablePostCard() for why.)
+    this.feedPostCards = page.locator('a[href^="/post/"]:not([href^="/post/-"])').filter({ visible: true });
 
     // Confirmed: a plain button, not role=menuitem — "Report Post" on posts,
     // "Report Reply" on replies, presumably "Report"/"Report Comment" on
@@ -105,14 +100,13 @@ export class ReportPage extends PostLoginSinglePostViewPage {
   }
 
   /**
-   * The 3-dot/"more" trigger scoped to a single feed card / comment row.
-   * Confirmed name on posts is exactly "Post options"; comments/replies use
+   * The 3-dot/"more" trigger scoped to a single comment/reply row. These use
    * a react-aria button with an unstable auto-generated id but a stable
    * aria-haspopup attribute (same pattern as CommentLifecyclePage.openCommentMenu).
+   * NOT used for feed/topic-page posts — see findReportablePostCard() below.
    */
   moreButtonIn(row: Locator): Locator {
-    return row.getByRole('button', { name: 'Post options' })
-      .or(row.locator('button[aria-haspopup]'))
+    return row.locator('button[aria-haspopup]')
       .or(row.getByRole('button', { name: /more|options?/i }))
       .first();
   }
@@ -135,13 +129,7 @@ export class ReportPage extends PostLoginSinglePostViewPage {
     for (let step = 0; step < tries; step++) {
       const i = opts.fromEnd ? count - 1 - step : step;
       const row = rowAt(i);
-      // "Post options" is conditionally RENDERED on hover (not just
-      // CSS-hidden), so it doesn't exist in the DOM to be found — let alone
-      // clicked — until the row is explicitly hovered first. click()'s
-      // built-in auto-hover happens on the already-resolved target, which is
-      // too late here.
       await row.scrollIntoViewIfNeeded().catch(() => {});
-      await row.hover().catch(() => {});
       const more = this.moreButtonIn(row);
       const opened = await more.click({ timeout: 5000 }).then(() => true).catch(() => false);
       if (!opened) continue;
@@ -152,10 +140,45 @@ export class ReportPage extends PostLoginSinglePostViewPage {
     throw new Error('Could not find any content authored by another user to report against.');
   }
 
-  /** Finds a feed/topic-page post card authored by someone else than the current user. */
+  /**
+   * Finds a feed/topic-page post authored by someone other than the
+   * logged-in account. Returns the post's title link (the row) so callers
+   * can navigate into it via row.click(), or reopen its menu via
+   * openPostOptionsMenu(row).
+   *
+   * "Post options" only mounts for the currently-HOVERED card — confirmed
+   * by comparing two live snapshots of the exact same post: one taken
+   * without hovering showed no trace of it anywhere, one taken after
+   * hovering showed it right in that card's computed accessible name. This
+   * deliberately does NOT climb to a "card wrapper" ancestor first: the
+   * accessibility tree collapses plain wrapper <div>s, so what looks like
+   * "one level up" there does not reliably map onto the real DOM, and a
+   * guessed ancestor depth hovers the wrong element. Instead it hovers the
+   * title link itself (a real, confirmed element — hover bubbles through
+   * every real ancestor regardless of depth) and then searches PAGE-LEVEL
+   * for "Post options", since only the actively-hovered card renders it.
+   */
   async findReportablePostCard(): Promise<Locator> {
     const count = await this.feedPostCards.count();
-    return this.findReportableRow(i => this.feedPostCards.nth(i), count);
+    const tries = Math.min(count, 10);
+    for (let i = 0; i < tries; i++) {
+      const row = this.feedPostCards.nth(i);
+      await row.scrollIntoViewIfNeeded().catch(() => {});
+      await row.hover().catch(() => {});
+      const trigger = this.page.getByRole('button', { name: 'Post options' }).first();
+      const opened = await trigger.click({ timeout: 3000 }).then(() => true).catch(() => false);
+      if (!opened) continue;
+      const reportable = await this.reportAction.isVisible({ timeout: 2000 }).catch(() => false);
+      await this.page.keyboard.press('Escape').catch(() => {});
+      if (reportable) return row;
+    }
+    throw new Error('Could not find any content authored by another user to report against.');
+  }
+
+  /** Reopens "Post options" for a row previously returned by findReportablePostCard(). */
+  async openPostOptionsMenu(row: Locator): Promise<void> {
+    await row.hover().catch(() => {});
+    await this.page.getByRole('button', { name: 'Post options' }).first().click();
   }
 
   /**

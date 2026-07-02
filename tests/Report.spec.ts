@@ -40,7 +40,7 @@ test.describe('Report — Happy Path (positive only)', () => {
     await flow.goToTrending();
     const row = await flow.findReportablePostCard();
 
-    await flow.moreButtonIn(row).click();
+    await flow.openPostOptionsMenu(row);
     await flow.openReportModal();
 
     await expect(flow.reportDialog).toBeVisible();
@@ -67,7 +67,7 @@ test.describe('Report — Happy Path (positive only)', () => {
     await flow.goToFirstTopicPage();
     const row = await flow.findReportablePostCard();
 
-    await flow.moreButtonIn(row).click();
+    await flow.openPostOptionsMenu(row);
     await flow.openReportModal();
 
     await expect(flow.reportDialog).toBeVisible();
@@ -104,7 +104,7 @@ test.describe('Report — Happy Path (positive only)', () => {
   test('Step 6 — Report Modal shows Reason, Additional details, Submit and Cancel', async () => {
     await flow.goToTrending();
     const row = await flow.findReportablePostCard();
-    await flow.moreButtonIn(row).click();
+    await flow.openPostOptionsMenu(row);
     await flow.openReportModal();
 
     await expect(flow.reportDialog).toBeVisible();
@@ -119,7 +119,7 @@ test.describe('Report — Happy Path (positive only)', () => {
   test('Step 7 — Selecting a Reason reflects the chosen value', async () => {
     await flow.goToTrending();
     const row = await flow.findReportablePostCard();
-    await flow.moreButtonIn(row).click();
+    await flow.openPostOptionsMenu(row);
     await flow.openReportModal();
 
     const [firstReason] = await flow.getReasonOptions();
@@ -134,7 +134,7 @@ test.describe('Report — Happy Path (positive only)', () => {
   test('Step 8 — Submitting a report with only a Reason shows a confirmation and closes the modal', async () => {
     await flow.goToTrending();
     const row = await flow.findReportablePostCard();
-    await flow.moreButtonIn(row).click();
+    await flow.openPostOptionsMenu(row);
     await flow.openReportModal();
 
     const [firstReason] = await flow.getReasonOptions();
@@ -150,7 +150,7 @@ test.describe('Report — Happy Path (positive only)', () => {
   test('Step 9 — Submitting a report with Reason and Additional details shows a confirmation and closes the modal', async () => {
     await flow.goToTrending();
     const row = await flow.findReportablePostCard();
-    await flow.moreButtonIn(row).click();
+    await flow.openPostOptionsMenu(row);
     await flow.openReportModal();
 
     const [firstReason] = await flow.getReasonOptions();
