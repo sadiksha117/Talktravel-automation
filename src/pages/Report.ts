@@ -6,10 +6,11 @@ import { PostLoginSinglePostViewPage } from './PostLoginSinglePostView';
  *
  * Report is cross-cutting: the same modal opens from a feed post card, a
  * topic-page post card, a Single Post View post, a comment, or a reply — but
- * ONLY for content NOT authored by the logged-in account. This suite runs
- * with a single shared login (see src/authState.ts / tests/auth.setup.ts),
- * not the two-account setup (`auth/reporter.json` / `auth/target.json`) the
- * doc describes, so "another user's content" is discovered dynamically:
+ * ONLY for content NOT authored by the logged-in account. This suite logs in
+ * with a single shared test account per-test (see CommentLifecyclePage /
+ * EditPostPage for the same pattern), not the two-account setup
+ * (`auth/reporter.json` / `auth/target.json`) the doc describes, so "another
+ * user's content" is discovered dynamically:
  * `findReportableRow` opens a candidate's 3-dot menu and keeps only rows
  * where "Report" is offered — which the doc itself states is exactly the
  * signal that distinguishes someone else's content from your own (own

@@ -1,10 +1,5 @@
 import { test, expect } from '@playwright/test';
 import { ReportPage } from '../src/pages/Report';
-import { STORAGE_STATE } from '../src/authState';
-
-// Reuse the shared logged-in session (created once by the setup project) so the
-// worker pool never triggers concurrent logins that invalidate each other.
-test.use({ storageState: STORAGE_STATE });
 
 /**
  * Report (Post / Comment / Reply) — POSITIVE (happy-path) suite.
@@ -15,12 +10,19 @@ test.use({ storageState: STORAGE_STATE });
  * details). Validation errors, Cancel, "cannot report own content", and
  * duplicate-report behavior are intentionally excluded from this file.
  *
- * This suite runs with a single shared login (no separate reporter/target
+ * This suite runs with a single shared account (no separate reporter/target
  * accounts), so "content authored by someone else" is discovered dynamically
  * via ReportPage.findReportablePostCard()/findReportableCommentRow() — see
  * src/pages/Report.ts for how that works. Every test runs for real against
  * whatever staging content currently exists; there are no skip guards.
+ *
+ * Logs in per-test (like CommentLifecycle.spec.ts) rather than via a shared
+ * storageState — concurrency is capped to 1 worker in playwright.config.ts so
+ * the shared account never sees overlapping logins that invalidate each other.
  */
+
+const VALID_EMAIL    = process.env.TEST_EMAIL ?? 'prempoudel72707@gmail.com';
+const VALID_PASSWORD = process.env.TEST_PASSWORD ?? 'Admin@123';
 
 test.describe('Report — Happy Path (positive only)', () => {
   let flow: ReportPage;
@@ -29,6 +31,7 @@ test.describe('Report — Happy Path (positive only)', () => {
 
   test.beforeEach(async ({ page }) => {
     flow = new ReportPage(page);
+    await flow.login(VALID_EMAIL, VALID_PASSWORD);
   });
 
   // ── Step 1: Report Post from Homepage feed ─────────────────────────────────
