@@ -146,7 +146,13 @@ export class ReportPage extends PostLoginSinglePostViewPage {
   /** Navigates to the Trending feed, then into the first topic/tag page. */
   async goToFirstTopicPage(): Promise<void> {
     await this.goToTrending();
-    const topicChip = this.page.locator('a[href^="/tags/"]').first();
+    // a[href^="/tags/"] also matches the (hidden) nav-dropdown topic list, so
+    // scope to a visible chip and exclude that dropdown — same fix already
+    // applied to topicChip in PostLoginSinglePostViewPage.
+    const topicChip = this.page
+      .locator('a.tag-default[href*="/tags/"]')
+      .or(this.page.locator('a[href^="/tags/"]:not(.nav-dropdown-link):not(.dropdown-item)').filter({ visible: true }))
+      .first();
     await topicChip.waitFor({ state: 'visible' });
     await topicChip.click();
     await this.page.waitForURL('**/tags/**');
