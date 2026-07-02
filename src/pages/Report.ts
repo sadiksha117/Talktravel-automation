@@ -164,9 +164,14 @@ export class ReportPage extends PostLoginSinglePostViewPage {
     for (let i = 0; i < tries; i++) {
       const row = this.feedPostCards.nth(i);
       await row.scrollIntoViewIfNeeded().catch(() => {});
+      // Reset the mouse away first so hover() always dispatches a genuine
+      // "enter" transition — if the cursor happens to already be near the
+      // target from a previous iteration, Playwright can skip the move,
+      // which can skip the mouseenter React listens on for this row.
+      await this.page.mouse.move(0, 0).catch(() => {});
       await row.hover().catch(() => {});
       const trigger = this.page.getByRole('button', { name: 'Post options' }).first();
-      const opened = await trigger.click({ timeout: 3000 }).then(() => true).catch(() => false);
+      const opened = await trigger.click({ timeout: 5000 }).then(() => true).catch(() => false);
       if (!opened) continue;
       const reportable = await this.reportAction.isVisible({ timeout: 2000 }).catch(() => false);
       await this.page.keyboard.press('Escape').catch(() => {});
@@ -177,8 +182,9 @@ export class ReportPage extends PostLoginSinglePostViewPage {
 
   /** Reopens "Post options" for a row previously returned by findReportablePostCard(). */
   async openPostOptionsMenu(row: Locator): Promise<void> {
+    await this.page.mouse.move(0, 0).catch(() => {});
     await row.hover().catch(() => {});
-    await this.page.getByRole('button', { name: 'Post options' }).first().click();
+    await this.page.getByRole('button', { name: 'Post options' }).first().click({ timeout: 5000 });
   }
 
   /**
