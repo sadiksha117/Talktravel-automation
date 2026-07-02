@@ -18,23 +18,26 @@ import { PostLoginSinglePostViewPage } from './PostLoginSinglePostView';
  *
  * Reuses the confirmed login()/openFirstPost()/dismissCookieBanner() helpers
  * and the confirmed `reportDialog` locator from PostLoginSinglePostViewPage.
- * All other selectors here are confirmed via codegen + a live accessibility
- * snapshot of the Trending feed: feed/topic-page cards have NO 3-dot menu of
- * their own — only an author link, title link, tags and Upvote/Downvote.
- * "Post options" (and therefore Report) only appears once a post is opened.
- * So "another user's content" on the feed is found by comparing each card's
- * author link against the logged-in account's own profile href, THEN
- * opening that post and confirming "Post options" → "Report Post" is
- * offered there (own content shows Edit/Delete instead). Comments/replies
- * DO have their own row-scoped 3-dot (a react-aria button with an unstable
- * id but a stable aria-haspopup attribute), so that path still opens the
- * menu in place. The Report action itself is a plain BUTTON ("Report Post" /
- * "Report Reply", not a role=menuitem); the reason picker is a react-select
+ * All other selectors here are confirmed via codegen against the live site:
+ * the 3-dot trigger on a post is a button named exactly "Post options"; the
+ * Report action itself is a plain BUTTON named "Report Post" / "Report
+ * Reply" (not a role=menuitem); the reason picker is a react-select
  * (`.custom-select__control`, options render page-level with role="option");
  * the details field is a textbox named "Please provide details about...";
  * and the submit button is labeled exactly "Submit" (not "Submit Report").
  * Selecting reason "Other" makes Additional details required on posts —
  * tests should pick a non-"Other" reason unless specifically testing that.
+ *
+ * IMPORTANT: on feed/topic-page cards, "Post options" is conditionally
+ * RENDERED (not just CSS-hidden) on hover — confirmed by comparing two
+ * codegen recordings of the exact same post: a static accessibility
+ * snapshot taken without hovering showed no "Post options" anywhere in the
+ * card at all, while a recording where the card was actually hovered before
+ * clicking showed it right in the link's computed accessible name. Since
+ * the element doesn't exist in the DOM until hovered, `.click()`'s built-in
+ * auto-hover isn't enough (you can't hover a locator that resolves to
+ * nothing) — `findReportableRow` explicitly calls `row.hover()` first to
+ * force it to mount before searching for it.
  */
 export class ReportPage extends PostLoginSinglePostViewPage {
   // Feed / topic-page post cards (same DOM shape confirmed for Homepage feed)
@@ -56,10 +59,17 @@ export class ReportPage extends PostLoginSinglePostViewPage {
   constructor(page: Page) {
     super(page);
 
-    // Title link of each feed/topic-page card — confirmed real <a href="/post/...">
-    // via ARIA snapshot. Excludes /post/-N (negative placeholder ids), same
-    // exclusion openFirstPost() already relies on for hidden/broken cards.
-    this.feedPostCards = page.locator('a[href^="/post/"]:not([href^="/post/-"])').filter({ visible: true });
+    // The card wrapper for each feed/topic-page post — one level up from the
+    // title link (confirmed via ARIA snapshot: the title link's parent is
+    // the same element whose computed accessible name includes "Post
+    // options"/"Follow this post" once hovered). Hovering/searching within
+    // the title link alone wouldn't find "Post options", since it's a
+    // sibling-level descendant of this wrapper, not of the title link.
+    // Excludes /post/-N (negative placeholder ids), same exclusion
+    // openFirstPost() already relies on for hidden/broken cards.
+    this.feedPostCards = page.locator('a[href^="/post/"]:not([href^="/post/-"])')
+      .filter({ visible: true })
+      .locator('xpath=..');
 
     // Confirmed: a plain button, not role=menuitem — "Report Post" on posts,
     // "Report Reply" on replies, presumably "Report"/"Report Comment" on
@@ -125,12 +135,14 @@ export class ReportPage extends PostLoginSinglePostViewPage {
     for (let step = 0; step < tries; step++) {
       const i = opts.fromEnd ? count - 1 - step : step;
       const row = rowAt(i);
-      const more = this.moreButtonIn(row);
-      // Click directly rather than pre-checking isVisible(): the "Post
-      // options" trigger is hover-revealed, and click() auto-scrolls/hovers
-      // as part of its actionability wait, whereas a bare isVisible() check
-      // does not — so a pre-check silently skipped every real candidate.
+      // "Post options" is conditionally RENDERED on hover (not just
+      // CSS-hidden), so it doesn't exist in the DOM to be found — let alone
+      // clicked — until the row is explicitly hovered first. click()'s
+      // built-in auto-hover happens on the already-resolved target, which is
+      // too late here.
       await row.scrollIntoViewIfNeeded().catch(() => {});
+      await row.hover().catch(() => {});
+      const more = this.moreButtonIn(row);
       const opened = await more.click({ timeout: 5000 }).then(() => true).catch(() => false);
       if (!opened) continue;
       const reportable = await this.reportAction.isVisible({ timeout: 2000 }).catch(() => false);
