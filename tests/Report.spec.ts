@@ -76,8 +76,9 @@ test.describe('Report — Happy Path (positive only)', () => {
   // ── Step 4: Report a Comment ────────────────────────────────────────────────
 
   test('Step 4 — Report a Comment opens the Report modal', async () => {
-    await flow.openFirstPost();
-    const row = await flow.findReportableCommentRow();
+    // Tries several posts rather than pinning to openFirstPost()'s always-the-same
+    // first post, which may have no comments from anyone but the logged-in account.
+    const row = await flow.findReportableCommentAcrossPosts();
 
     await flow.moreButtonIn(row).click();
     await flow.openReportModal();
@@ -88,10 +89,9 @@ test.describe('Report — Happy Path (positive only)', () => {
   // ── Step 5: Report a Reply (nested comment) ─────────────────────────────────
 
   test('Step 5 — Report a Reply opens the Report modal', async () => {
-    await flow.openFirstPost();
     // Bias toward rows further down the thread, which are typically deeper
     // replies rather than top-level comments.
-    const row = await flow.findReportableCommentRow({ fromEnd: true });
+    const row = await flow.findReportableCommentAcrossPosts({ fromEnd: true });
 
     await flow.moreButtonIn(row).click();
     await flow.openReportModal();

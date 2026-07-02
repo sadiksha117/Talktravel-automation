@@ -183,9 +183,9 @@ export class ReportPage extends PostLoginSinglePostViewPage {
 
   /**
    * Finds a comment or reply row (skipping index 0, the post-level upvote)
-   * authored by someone else. `fromEnd` biases toward rows that render later
-   * in the thread — typically deeper replies — since exact nesting-level
-   * selectors aren't confirmed against the live site.
+   * authored by someone else, on the CURRENT post only. `fromEnd` biases
+   * toward rows that render later in the thread — typically deeper replies —
+   * since exact nesting-level selectors aren't confirmed against the live site.
    */
   async findReportableCommentRow(opts: { fromEnd?: boolean } = {}): Promise<Locator> {
     const upvotes = this.page.locator('button[data-action="upvote"]');
@@ -196,6 +196,36 @@ export class ReportPage extends PostLoginSinglePostViewPage {
       count,
       opts
     );
+  }
+
+  /**
+   * Same as findReportableCommentRow(), but tries several different posts
+   * from the Trending feed before giving up. openFirstPost() always opens
+   * the SAME first feed post, and if that post's comments happen to all be
+   * self-authored (or it has none), findReportableCommentRow() would fail
+   * deterministically every run rather than flakily — this widens the
+   * search across posts instead.
+   */
+  async findReportableCommentAcrossPosts(opts: { fromEnd?: boolean; maxPosts?: number } = {}): Promise<Locator> {
+    await this.goToTrending();
+    const count = await this.feedPostCards.count();
+    const maxPosts = opts.maxPosts ?? 5;
+    const tries = Math.min(count, maxPosts);
+    for (let i = 0; i < tries; i++) {
+      await this.goToTrending();
+      const card = this.feedPostCards.nth(i);
+      await card.scrollIntoViewIfNeeded().catch(() => {});
+      const opened = await card.click({ timeout: 5000 }).then(() => true).catch(() => false);
+      if (!opened) continue;
+      await this.page.waitForURL('**/post/**', { timeout: 10000 }).catch(() => {});
+      await this.page.waitForLoadState('networkidle', { timeout: 15000 }).catch(() => {});
+      try {
+        return await this.findReportableCommentRow(opts);
+      } catch {
+        continue;
+      }
+    }
+    throw new Error('Could not find any post with a comment authored by another user to report against.');
   }
 
   /** Navigates to the Trending feed, tolerating the SPA's transient ERR_ABORTED redirects. */
@@ -245,16 +275,21 @@ export class ReportPage extends PostLoginSinglePostViewPage {
     await this.openReportModal();
   }
 
-  /** Reads the list of available reasons without hardcoding them. */
+  /**
+   * Reads the list of available reasons without hardcoding them. Always
+   * closes the dropdown before returning (Escape) so a following
+   * selectReason() call reopens it from a known-closed state — leaving it
+   * open caused selectReason()'s own click to TOGGLE it shut instead of
+   * opening it, since react-select treats a click on an already-open
+   * control as a close.
+   */
   async getReasonOptions(): Promise<string[]> {
     await this.reasonDropdown.click();
     const tagName = await this.reasonDropdown.evaluate(el => el.tagName.toLowerCase()).catch(() => '');
-    if (tagName === 'select') {
-      const options = await this.reasonDropdown.locator('option').allTextContents();
-      await this.page.keyboard.press('Escape').catch(() => {});
-      return options.map(o => o.trim()).filter(Boolean);
-    }
-    const options = await this.page.getByRole('option').allTextContents();
+    const options = tagName === 'select'
+      ? await this.reasonDropdown.locator('option').allTextContents()
+      : await this.page.getByRole('option').allTextContents();
+    await this.page.keyboard.press('Escape').catch(() => {});
     return options.map(o => o.trim()).filter(Boolean);
   }
 
