@@ -131,21 +131,39 @@ export class ReportPage extends PostLoginSinglePostViewPage {
   }
 
   /**
-   * A known, stable post authored by someone else ("testprem"), taken
-   * directly from the codegen recordings, tagged "Betaninjas" so it can also
-   * be reached via a topic page. Using a fixed slug instead of matching a
-   * feed card's link text avoids two problems seen in practice: the link's
-   * accessible name embeds the live comment/vote counts (they change
-   * between runs, breaking a text-based match), and finding "Post options"
-   * on a feed card requires hovering it — reliable on the post's own page,
-   * but too timing-sensitive across many feed cards to depend on.
+   * A known, stable post authored by someone else ("testprem", "txt
+   * 1782810063746"), tagged "AmericanAirlines". Chosen because it has
+   * consistently ranked as the very FIRST card on the Trending feed across
+   * every live run observed so far — a lower-traffic post (e.g. one with
+   * just 1 comment) can fall off the first page of a popularity-sorted feed,
+   * which is what broke the previous choice. Using a fixed slug instead of
+   * matching a feed card's link text also avoids the link's accessible name
+   * embedding live comment/vote counts, which change between runs and break
+   * a text-based match.
    */
-  static readonly KNOWN_POST_PATH = '/post/new-post-27';
-  static readonly KNOWN_TOPIC_PATH = '/tags/Betaninjas';
+  static readonly KNOWN_POST_PATH = '/post/-13';
+  static readonly KNOWN_TOPIC_PATH = '/tags/AmericanAirlines';
+
+  /**
+   * Navigates to a URL, tolerating net::ERR_ABORTED — the SPA frequently
+   * aborts an in-flight navigation when its router redirects (same benign
+   * pattern already handled by PostLoginHomepagePage.safeGoto / goToTrending
+   * below), so a plain page.goto() here intermittently threw.
+   */
+  private async safeGoto(url: string): Promise<void> {
+    try {
+      await this.page.goto(url, { waitUntil: 'domcontentloaded' });
+    } catch (e) {
+      const msg = String(e);
+      const benign = msg.includes('ERR_ABORTED') || msg.includes('interrupted by another navigation');
+      if (!benign) throw e;
+    }
+    await this.page.waitForLoadState('domcontentloaded');
+  }
 
   /** Opens the known reportable post directly by URL. */
   async openKnownPost(): Promise<void> {
-    await this.page.goto(`https://staging.talktravel.com${ReportPage.KNOWN_POST_PATH}`, { waitUntil: 'domcontentloaded' });
+    await this.safeGoto(`https://staging.talktravel.com${ReportPage.KNOWN_POST_PATH}`);
     await this.dismissCookieBanner();
     await this.waitForPageLoad();
   }
@@ -160,7 +178,7 @@ export class ReportPage extends PostLoginSinglePostViewPage {
 
   /** Reaches the known reportable post via its Topic page (exercises that entry surface). */
   async openKnownPostFromTopic(): Promise<void> {
-    await this.page.goto(`https://staging.talktravel.com${ReportPage.KNOWN_TOPIC_PATH}`, { waitUntil: 'domcontentloaded' });
+    await this.safeGoto(`https://staging.talktravel.com${ReportPage.KNOWN_TOPIC_PATH}`);
     await this.dismissCookieBanner();
     await this.waitForPageLoad();
     await this.page.locator(`a[href="${ReportPage.KNOWN_POST_PATH}"]`).first().click();
