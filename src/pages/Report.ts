@@ -18,16 +18,23 @@ import { PostLoginSinglePostViewPage } from './PostLoginSinglePostView';
  *
  * Reuses the confirmed login()/openFirstPost()/dismissCookieBanner() helpers
  * and the confirmed `reportDialog` locator from PostLoginSinglePostViewPage.
- * All other selectors here are confirmed via codegen against the live site:
- * the 3-dot trigger on a post is a button named exactly "Post options"; the
- * Report action itself is a plain BUTTON named "Report Post" / "Report
- * Reply" (not a role=menuitem); the reason picker is a react-select
- * (`.custom-select__input-container`, options render page-level with
- * role="option"); the details field is a textbox named "Please provide
- * details about..."; and the submit button is labeled exactly "Submit" (not
- * "Submit Report"). Selecting reason "Other" makes Additional details
- * required on posts — tests should pick a non-"Other" reason unless
- * specifically testing that.
+ * All other selectors here are confirmed via codegen + a live accessibility
+ * snapshot of the Trending feed: feed/topic-page cards have NO 3-dot menu of
+ * their own — only an author link, title link, tags and Upvote/Downvote.
+ * "Post options" (and therefore Report) only appears once a post is opened.
+ * So "another user's content" on the feed is found by comparing each card's
+ * author link against the logged-in account's own profile href, THEN
+ * opening that post and confirming "Post options" → "Report Post" is
+ * offered there (own content shows Edit/Delete instead). Comments/replies
+ * DO have their own row-scoped 3-dot (a react-aria button with an unstable
+ * id but a stable aria-haspopup attribute), so that path still opens the
+ * menu in place. The Report action itself is a plain BUTTON ("Report Post" /
+ * "Report Reply", not a role=menuitem); the reason picker is a react-select
+ * (`.custom-select__control`, options render page-level with role="option");
+ * the details field is a textbox named "Please provide details about...";
+ * and the submit button is labeled exactly "Submit" (not "Submit Report").
+ * Selecting reason "Other" makes Additional details required on posts —
+ * tests should pick a non-"Other" reason unless specifically testing that.
  */
 export class ReportPage extends PostLoginSinglePostViewPage {
   // Feed / topic-page post cards (same DOM shape confirmed for Homepage feed)
@@ -49,7 +56,10 @@ export class ReportPage extends PostLoginSinglePostViewPage {
   constructor(page: Page) {
     super(page);
 
-    this.feedPostCards = page.locator('a[href^="/post/"]:has(div)');
+    // Title link of each feed/topic-page card — confirmed real <a href="/post/...">
+    // via ARIA snapshot. Excludes /post/-N (negative placeholder ids), same
+    // exclusion openFirstPost() already relies on for hidden/broken cards.
+    this.feedPostCards = page.locator('a[href^="/post/"]:not([href^="/post/-"])').filter({ visible: true });
 
     // Confirmed: a plain button, not role=menuitem — "Report Post" on posts,
     // "Report Reply" on replies, presumably "Report"/"Report Comment" on
