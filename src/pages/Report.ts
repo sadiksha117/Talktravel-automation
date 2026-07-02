@@ -17,13 +17,17 @@ import { PostLoginSinglePostViewPage } from './PostLoginSinglePostView';
  * content shows Edit/Delete instead).
  *
  * Reuses the confirmed login()/openFirstPost()/dismissCookieBanner() helpers
- * and the confirmed `postMoreBtn` / `menuReport` / `reportDialog` locators
- * from PostLoginSinglePostViewPage. The modal's internal controls (reason,
- * details, submit, cancel) are not yet confirmed via codegen against the
- * live site, so they use the same defensive multi-selector fallback style
- * already established elsewhere in this codebase (see `followBtn` in
- * PostLoginSinglePostView.ts) — expect to tighten these once run against a
- * live session.
+ * and the confirmed `reportDialog` locator from PostLoginSinglePostViewPage.
+ * All other selectors here are confirmed via codegen against the live site:
+ * the 3-dot trigger on a post is a button named exactly "Post options"; the
+ * Report action itself is a plain BUTTON named "Report Post" / "Report
+ * Reply" (not a role=menuitem); the reason picker is a react-select
+ * (`.custom-select__input-container`, options render page-level with
+ * role="option"); the details field is a textbox named "Please provide
+ * details about..."; and the submit button is labeled exactly "Submit" (not
+ * "Submit Report"). Selecting reason "Other" makes Additional details
+ * required on posts — tests should pick a non-"Other" reason unless
+ * specifically testing that.
  */
 export class ReportPage extends PostLoginSinglePostViewPage {
   // Feed / topic-page post cards (same DOM shape confirmed for Homepage feed)
@@ -47,33 +51,49 @@ export class ReportPage extends PostLoginSinglePostViewPage {
 
     this.feedPostCards = page.locator('a[href^="/post/"]:has(div)');
 
-    this.reportAction = page.locator('[role="menuitem"]:has-text("Report")')
-      .or(page.getByRole('menuitem', { name: /^report/i }))
-      .or(page.getByRole('button', { name: /^report/i }))
+    // Confirmed: a plain button, not role=menuitem — "Report Post" on posts,
+    // "Report Reply" on replies, presumably "Report"/"Report Comment" on
+    // top-level comments. Matched page-level since these render in a portal
+    // (same pattern as menuEdit/menuDelete elsewhere in this codebase).
+    this.reportAction = page.getByRole('button', { name: /^report/i })
+      .or(page.locator('[role="menuitem"]:has-text("Report")'))
       .first();
 
     this.modalHeading = this.reportDialog.getByRole('heading').first();
 
-    this.reasonDropdown = this.reportDialog.locator('select')
+    // Confirmed: a react-select control (`.custom-select__input-container`
+    // opens it), not a native <select>. Scoped to the outer `__control` —
+    // still clickable to open the dropdown, but (per react-select's standard
+    // BEM-style class convention) also encloses the `__single-value` display
+    // once a reason is picked, so assertions against this locator work too.
+    this.reasonDropdown = this.reportDialog.locator('.custom-select__control')
+      .or(this.reportDialog.locator('.custom-select__input-container'))
+      .or(this.reportDialog.locator('select'))
       .or(this.reportDialog.getByRole('combobox'))
-      .or(this.reportDialog.getByRole('button', { name: /reason/i }))
       .first();
 
-    this.detailsTextarea = this.reportDialog.locator('textarea')
-      .or(this.reportDialog.getByRole('textbox').last())
+    // Confirmed: textbox named "Please provide details about the issue..." (or similar).
+    this.detailsTextarea = this.reportDialog.getByRole('textbox', { name: /please provide details/i })
+      .or(this.reportDialog.locator('textarea'))
       .first();
 
-    this.submitReportBtn = this.reportDialog.getByRole('button', { name: /submit report|^submit$/i }).first();
+    // Confirmed: button labelled exactly "Submit" (not "Submit Report").
+    this.submitReportBtn = this.reportDialog.getByRole('button', { name: /^submit$|submit report/i }).first();
     this.cancelReportBtn = this.reportDialog.getByRole('button', { name: /^cancel$/i }).first();
 
     this.confirmationToast = page.locator('text=/report submitted|thank you for your report|report received/i').first();
   }
 
-  /** The 3-dot/"more" trigger scoped to a single feed card / comment row. */
+  /**
+   * The 3-dot/"more" trigger scoped to a single feed card / comment row.
+   * Confirmed name on posts is exactly "Post options"; comments/replies use
+   * a react-aria button with an unstable auto-generated id but a stable
+   * aria-haspopup attribute (same pattern as CommentLifecyclePage.openCommentMenu).
+   */
   moreButtonIn(row: Locator): Locator {
-    return row.locator('button[data-action="more"], button[data-action="options"]')
+    return row.getByRole('button', { name: 'Post options' })
       .or(row.locator('button[aria-haspopup]'))
-      .or(row.getByRole('button', { name: /^more$|options|\.\.\./i }))
+      .or(row.getByRole('button', { name: /more|options?/i }))
       .first();
   }
 
@@ -96,8 +116,13 @@ export class ReportPage extends PostLoginSinglePostViewPage {
       const i = opts.fromEnd ? count - 1 - step : step;
       const row = rowAt(i);
       const more = this.moreButtonIn(row);
-      if (!(await more.isVisible({ timeout: 1000 }).catch(() => false))) continue;
-      await more.click();
+      // Click directly rather than pre-checking isVisible(): the "Post
+      // options" trigger is hover-revealed, and click() auto-scrolls/hovers
+      // as part of its actionability wait, whereas a bare isVisible() check
+      // does not — so a pre-check silently skipped every real candidate.
+      await row.scrollIntoViewIfNeeded().catch(() => {});
+      const opened = await more.click({ timeout: 5000 }).then(() => true).catch(() => false);
+      if (!opened) continue;
       const reportable = await this.reportAction.isVisible({ timeout: 2000 }).catch(() => false);
       await this.page.keyboard.press('Escape').catch(() => {});
       if (reportable) return row;
@@ -168,7 +193,10 @@ export class ReportPage extends PostLoginSinglePostViewPage {
 
   /** Opens the Report modal for the current Single Post View's post. */
   async openReportModalForCurrentPost(): Promise<void> {
-    await this.postMoreBtn.click();
+    // Prefer the confirmed "Post options" name over the base class's generic
+    // postMoreBtn fallback chain, which doesn't include that exact name.
+    const trigger = this.page.getByRole('button', { name: 'Post options' }).or(this.postMoreBtn).first();
+    await trigger.click();
     await this.openReportModal();
   }
 
