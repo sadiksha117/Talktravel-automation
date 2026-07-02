@@ -18,34 +18,31 @@ import { PostLoginSinglePostViewPage } from './PostLoginSinglePostView';
  *
  * Reuses the confirmed login()/openFirstPost()/dismissCookieBanner() helpers
  * and the confirmed `reportDialog` locator from PostLoginSinglePostViewPage.
- * All other selectors here are confirmed via codegen against the live site:
- * the 3-dot trigger on a post is a button named exactly "Post options"; the
- * Report action itself is a plain BUTTON named "Report Post" / "Report
- * Reply" (not a role=menuitem); the reason picker is a react-select
- * (`.custom-select__control`, options render page-level with role="option");
- * the details field is a textbox named "Please provide details about...";
- * and the submit button is labeled exactly "Submit" (not "Submit Report").
- * Selecting reason "Other" makes Additional details required on posts —
- * tests should pick a non-"Other" reason unless specifically testing that.
+ * All other selectors here are taken directly from two codegen recordings
+ * against the live site: the 3-dot trigger on a post is a button named
+ * exactly "Post options"; the Report action itself is a plain BUTTON named
+ * "Report Post" / "Report Reply" (not a role=menuitem); the reason picker is
+ * a react-select (`.custom-select__control`, options render page-level with
+ * role="option"); the details field is a textbox named "Please provide
+ * details about..."; and the submit button is labeled exactly "Submit" (not
+ * "Submit Report"). Selecting reason "Other" makes Additional details
+ * required on posts — tests should pick a non-"Other" reason unless
+ * specifically testing that.
  *
- * IMPORTANT: on feed/topic-page cards, "Post options" is conditionally
- * RENDERED (not just CSS-hidden) on hover — confirmed by comparing two
- * codegen recordings of the exact same post: a static accessibility
- * snapshot taken without hovering showed no "Post options" anywhere in the
- * card at all, while a recording where the card was actually hovered before
- * clicking showed it right in the link's computed accessible name. Since
- * the element doesn't exist in the DOM until hovered, `.click()`'s built-in
- * auto-hover isn't enough (you can't hover a locator that resolves to
- * nothing) — `findReportableRow` explicitly calls `row.hover()` first to
- * force it to mount before searching for it.
+ * Post-report tests navigate to a KNOWN, stable post (KNOWN_POST_PATH below,
+ * from the recordings) rather than scanning the feed for a reportable one.
+ * Scanning required hovering each feed card to reveal "Post options" (it's
+ * conditionally RENDERED there, not just CSS-hidden — confirmed by comparing
+ * two live snapshots of the same post: unhovered showed no trace of it,
+ * hovered showed it right in the link's accessible name), which proved too
+ * timing-sensitive across many live runs. "Post options" on a post's OWN
+ * page never needed hovering and was reliable in every run, so tests open
+ * the known post directly (optionally via the feed/a topic page to still
+ * exercise that entry point) and use it there instead.
  */
 export class ReportPage extends PostLoginSinglePostViewPage {
-  // Feed / topic-page post cards (same DOM shape confirmed for Homepage feed)
-  readonly feedPostCards: Locator;
-
-  // "Report" trigger — may render as a role=menuitem (posts) or a plain
-  // button (comments/replies use plain buttons for Edit/Delete per
-  // CommentLifecyclePage, so Report likely follows the same pattern)
+  // "Report" trigger — a plain button ("Report Post" / "Report Reply"), not
+  // a role=menuitem, confirmed via codegen.
   readonly reportAction: Locator;
 
   // Report modal internals
@@ -58,13 +55,6 @@ export class ReportPage extends PostLoginSinglePostViewPage {
 
   constructor(page: Page) {
     super(page);
-
-    // Title link of each feed/topic-page card — confirmed real <a href="/post/...">
-    // via ARIA snapshot. Excludes /post/-N (negative placeholder ids), same
-    // exclusion openFirstPost() already relies on for hidden/broken cards.
-    // (Deliberately NOT climbing to a "card wrapper" here — see
-    // findReportablePostCard() for why.)
-    this.feedPostCards = page.locator('a[href^="/post/"]:not([href^="/post/-"])').filter({ visible: true });
 
     // Confirmed: a plain button, not role=menuitem — "Report Post" on posts,
     // "Report Reply" on replies, presumably "Report"/"Report Comment" on
@@ -103,7 +93,7 @@ export class ReportPage extends PostLoginSinglePostViewPage {
    * The 3-dot/"more" trigger scoped to a single comment/reply row. These use
    * a react-aria button with an unstable auto-generated id but a stable
    * aria-haspopup attribute (same pattern as CommentLifecyclePage.openCommentMenu).
-   * NOT used for feed/topic-page posts — see findReportablePostCard() below.
+   * NOT used for posts — see openPostOptionsMenu() below.
    */
   moreButtonIn(row: Locator): Locator {
     return row.locator('button[aria-haspopup]')
@@ -141,48 +131,46 @@ export class ReportPage extends PostLoginSinglePostViewPage {
   }
 
   /**
-   * Finds a feed/topic-page post authored by someone other than the
-   * logged-in account. Returns the post's title link (the row) so callers
-   * can navigate into it via row.click(), or reopen its menu via
-   * openPostOptionsMenu(row).
-   *
-   * "Post options" only mounts for the currently-HOVERED card — confirmed
-   * by comparing two live snapshots of the exact same post: one taken
-   * without hovering showed no trace of it anywhere, one taken after
-   * hovering showed it right in that card's computed accessible name. This
-   * deliberately does NOT climb to a "card wrapper" ancestor first: the
-   * accessibility tree collapses plain wrapper <div>s, so what looks like
-   * "one level up" there does not reliably map onto the real DOM, and a
-   * guessed ancestor depth hovers the wrong element. Instead it hovers the
-   * title link itself (a real, confirmed element — hover bubbles through
-   * every real ancestor regardless of depth) and then searches PAGE-LEVEL
-   * for "Post options", since only the actively-hovered card renders it.
+   * A known, stable post authored by someone else ("testprem"), taken
+   * directly from the codegen recordings, tagged "Betaninjas" so it can also
+   * be reached via a topic page. Using a fixed slug instead of matching a
+   * feed card's link text avoids two problems seen in practice: the link's
+   * accessible name embeds the live comment/vote counts (they change
+   * between runs, breaking a text-based match), and finding "Post options"
+   * on a feed card requires hovering it — reliable on the post's own page,
+   * but too timing-sensitive across many feed cards to depend on.
    */
-  async findReportablePostCard(): Promise<Locator> {
-    const count = await this.feedPostCards.count();
-    const tries = Math.min(count, 10);
-    for (let i = 0; i < tries; i++) {
-      const row = this.feedPostCards.nth(i);
-      await row.scrollIntoViewIfNeeded().catch(() => {});
-      await row.hover().catch(() => {});
-      // Give React a brief moment to actually mount the conditionally-rendered
-      // button after the hover event fires, before searching for it.
-      await this.page.waitForTimeout(300);
-      const trigger = this.page.getByRole('button', { name: 'Post options' }).first();
-      const opened = await trigger.click({ timeout: 5000 }).then(() => true).catch(() => false);
-      if (!opened) continue;
-      const reportable = await this.reportAction.isVisible({ timeout: 2000 }).catch(() => false);
-      await this.page.keyboard.press('Escape').catch(() => {});
-      if (reportable) return row;
-    }
-    throw new Error('Could not find any content authored by another user to report against.');
+  static readonly KNOWN_POST_PATH = '/post/new-post-27';
+  static readonly KNOWN_TOPIC_PATH = '/tags/Betaninjas';
+
+  /** Opens the known reportable post directly by URL. */
+  async openKnownPost(): Promise<void> {
+    await this.page.goto(`https://staging.talktravel.com${ReportPage.KNOWN_POST_PATH}`, { waitUntil: 'domcontentloaded' });
+    await this.dismissCookieBanner();
+    await this.waitForPageLoad();
   }
 
-  /** Reopens "Post options" for a row previously returned by findReportablePostCard(). */
-  async openPostOptionsMenu(row: Locator): Promise<void> {
-    await row.hover().catch(() => {});
-    await this.page.waitForTimeout(300);
-    await this.page.getByRole('button', { name: 'Post options' }).first().click({ timeout: 5000 });
+  /** Reaches the known reportable post via the Homepage feed link (exercises that entry surface). */
+  async openKnownPostFromFeed(): Promise<void> {
+    await this.goToTrending();
+    await this.page.locator(`a[href="${ReportPage.KNOWN_POST_PATH}"]`).first().click();
+    await this.page.waitForURL('**/post/**');
+    await this.waitForPageLoad();
+  }
+
+  /** Reaches the known reportable post via its Topic page (exercises that entry surface). */
+  async openKnownPostFromTopic(): Promise<void> {
+    await this.page.goto(`https://staging.talktravel.com${ReportPage.KNOWN_TOPIC_PATH}`, { waitUntil: 'domcontentloaded' });
+    await this.dismissCookieBanner();
+    await this.waitForPageLoad();
+    await this.page.locator(`a[href="${ReportPage.KNOWN_POST_PATH}"]`).first().click();
+    await this.page.waitForURL('**/post/**');
+    await this.waitForPageLoad();
+  }
+
+  /** Opens "Post options" on the currently-open Single Post View — always available there, no hover needed. */
+  async openPostOptionsMenu(): Promise<void> {
+    await this.page.getByRole('button', { name: 'Post options' }).or(this.postMoreBtn).first().click();
   }
 
   /**
@@ -212,12 +200,13 @@ export class ReportPage extends PostLoginSinglePostViewPage {
    */
   async findReportableCommentAcrossPosts(opts: { fromEnd?: boolean; maxPosts?: number } = {}): Promise<Locator> {
     await this.goToTrending();
-    const count = await this.feedPostCards.count();
+    const titleLinks = this.page.locator('a[href^="/post/"]:not([href^="/post/-"])').filter({ visible: true });
+    const count = await titleLinks.count();
     const maxPosts = opts.maxPosts ?? 5;
     const tries = Math.min(count, maxPosts);
     for (let i = 0; i < tries; i++) {
       await this.goToTrending();
-      const card = this.feedPostCards.nth(i);
+      const card = titleLinks.nth(i);
       await card.scrollIntoViewIfNeeded().catch(() => {});
       const opened = await card.click({ timeout: 5000 }).then(() => true).catch(() => false);
       if (!opened) continue;
@@ -247,36 +236,10 @@ export class ReportPage extends PostLoginSinglePostViewPage {
     await this.page.waitForLoadState('networkidle', { timeout: 15000 }).catch(() => {});
   }
 
-  /** Navigates to the Trending feed, then into the first topic/tag page. */
-  async goToFirstTopicPage(): Promise<void> {
-    await this.goToTrending();
-    // a[href^="/tags/"] also matches the (hidden) nav-dropdown topic list, so
-    // scope to a visible chip and exclude that dropdown — same fix already
-    // applied to topicChip in PostLoginSinglePostViewPage.
-    const topicChip = this.page
-      .locator('a.tag-default[href*="/tags/"]')
-      .or(this.page.locator('a[href^="/tags/"]:not(.nav-dropdown-link):not(.dropdown-item)').filter({ visible: true }))
-      .first();
-    await topicChip.waitFor({ state: 'visible' });
-    await topicChip.click();
-    await this.page.waitForURL('**/tags/**');
-    await this.waitForPageLoad();
-    await this.page.waitForLoadState('networkidle', { timeout: 15000 }).catch(() => {});
-  }
-
   /** Clicks the already-open "Report" menu item and waits for the modal. */
   async openReportModal(): Promise<void> {
     await this.reportAction.click();
     await this.reportDialog.waitFor({ state: 'visible', timeout: 10000 });
-  }
-
-  /** Opens the Report modal for the current Single Post View's post. */
-  async openReportModalForCurrentPost(): Promise<void> {
-    // Prefer the confirmed "Post options" name over the base class's generic
-    // postMoreBtn fallback chain, which doesn't include that exact name.
-    const trigger = this.page.getByRole('button', { name: 'Post options' }).or(this.postMoreBtn).first();
-    await trigger.click();
-    await this.openReportModal();
   }
 
   /**

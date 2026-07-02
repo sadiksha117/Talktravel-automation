@@ -10,11 +10,13 @@ import { ReportPage } from '../src/pages/Report';
  * details). Validation errors, Cancel, "cannot report own content", and
  * duplicate-report behavior are intentionally excluded from this file.
  *
- * This suite runs with a single shared account (no separate reporter/target
- * accounts), so "content authored by someone else" is discovered dynamically
- * via ReportPage.findReportablePostCard()/findReportableCommentRow() — see
- * src/pages/Report.ts for how that works. Every test runs for real against
- * whatever staging content currently exists; there are no skip guards.
+ * Post-report tests use a KNOWN, stable post (ReportPage.KNOWN_POST_PATH),
+ * taken directly from codegen recordings against the live site, instead of
+ * scanning the feed for a reportable one — scanning required hovering each
+ * feed card to reveal "Post options", which proved too timing-sensitive
+ * across many live runs, while "Post options" on the post's own page was
+ * reliable every time. Comment/reply discovery still searches dynamically
+ * (findReportableCommentAcrossPosts) since that part already works reliably.
  *
  * Logs in per-test (like CommentLifecycle.spec.ts) rather than via a shared
  * storageState — concurrency is capped to 1 worker in playwright.config.ts so
@@ -37,10 +39,8 @@ test.describe('Report — Happy Path (positive only)', () => {
   // ── Step 1: Report Post from Homepage feed ─────────────────────────────────
 
   test('Step 1 — Report Post from the Homepage feed opens the Report modal', async () => {
-    await flow.goToTrending();
-    const row = await flow.findReportablePostCard();
-
-    await flow.openPostOptionsMenu(row);
+    await flow.openKnownPostFromFeed();
+    await flow.openPostOptionsMenu();
     await flow.openReportModal();
 
     await expect(flow.reportDialog).toBeVisible();
@@ -48,15 +48,10 @@ test.describe('Report — Happy Path (positive only)', () => {
 
   // ── Step 2: Report Post from Single Post View ──────────────────────────────
 
-  test('Step 2 — Report Post from Single Post View opens the Report modal', async ({ page }) => {
-    await flow.goToTrending();
-    const row = await flow.findReportablePostCard();
-
-    await row.click();
-    await page.waitForURL('**/post/**');
-    await page.waitForLoadState('networkidle', { timeout: 15000 }).catch(() => {});
-
-    await flow.openReportModalForCurrentPost();
+  test('Step 2 — Report Post from Single Post View opens the Report modal', async () => {
+    await flow.openKnownPost();
+    await flow.openPostOptionsMenu();
+    await flow.openReportModal();
 
     await expect(flow.reportDialog).toBeVisible();
   });
@@ -64,10 +59,8 @@ test.describe('Report — Happy Path (positive only)', () => {
   // ── Step 3: Report Post from a Topic page ──────────────────────────────────
 
   test('Step 3 — Report Post from a Topic page opens the Report modal', async () => {
-    await flow.goToFirstTopicPage();
-    const row = await flow.findReportablePostCard();
-
-    await flow.openPostOptionsMenu(row);
+    await flow.openKnownPostFromTopic();
+    await flow.openPostOptionsMenu();
     await flow.openReportModal();
 
     await expect(flow.reportDialog).toBeVisible();
@@ -102,9 +95,8 @@ test.describe('Report — Happy Path (positive only)', () => {
   // ── Step 6: Verify Report Modal structure ───────────────────────────────────
 
   test('Step 6 — Report Modal shows Reason, Additional details, Submit and Cancel', async () => {
-    await flow.goToTrending();
-    const row = await flow.findReportablePostCard();
-    await flow.openPostOptionsMenu(row);
+    await flow.openKnownPost();
+    await flow.openPostOptionsMenu();
     await flow.openReportModal();
 
     await expect(flow.reportDialog).toBeVisible();
@@ -117,9 +109,8 @@ test.describe('Report — Happy Path (positive only)', () => {
   // ── Step 7: Select a Reason from the dropdown ───────────────────────────────
 
   test('Step 7 — Selecting a Reason reflects the chosen value', async () => {
-    await flow.goToTrending();
-    const row = await flow.findReportablePostCard();
-    await flow.openPostOptionsMenu(row);
+    await flow.openKnownPost();
+    await flow.openPostOptionsMenu();
     await flow.openReportModal();
 
     const [firstReason] = await flow.getReasonOptions();
@@ -132,9 +123,8 @@ test.describe('Report — Happy Path (positive only)', () => {
   // ── Step 8: Submit Report with Reason only ──────────────────────────────────
 
   test('Step 8 — Submitting a report with only a Reason shows a confirmation and closes the modal', async () => {
-    await flow.goToTrending();
-    const row = await flow.findReportablePostCard();
-    await flow.openPostOptionsMenu(row);
+    await flow.openKnownPost();
+    await flow.openPostOptionsMenu();
     await flow.openReportModal();
 
     const [firstReason] = await flow.getReasonOptions();
@@ -148,9 +138,8 @@ test.describe('Report — Happy Path (positive only)', () => {
   // ── Step 9: Submit Report with Reason + Additional details ─────────────────
 
   test('Step 9 — Submitting a report with Reason and Additional details shows a confirmation and closes the modal', async () => {
-    await flow.goToTrending();
-    const row = await flow.findReportablePostCard();
-    await flow.openPostOptionsMenu(row);
+    await flow.openKnownPost();
+    await flow.openPostOptionsMenu();
     await flow.openReportModal();
 
     const [firstReason] = await flow.getReasonOptions();
@@ -165,14 +154,10 @@ test.describe('Report — Happy Path (positive only)', () => {
   // ── Step 13: Reported content stays visible after reload ───────────────────
 
   test('Step 13 — Reported post remains visible after a page reload', async ({ page }) => {
-    await flow.goToTrending();
-    const row = await flow.findReportablePostCard();
+    await flow.openKnownPost();
+    await flow.openPostOptionsMenu();
+    await flow.openReportModal();
 
-    await row.click();
-    await page.waitForURL('**/post/**');
-    await page.waitForLoadState('networkidle', { timeout: 15000 }).catch(() => {});
-
-    await flow.openReportModalForCurrentPost();
     const [firstReason] = await flow.getReasonOptions();
     await flow.selectReason(firstReason);
     await flow.submitReport();
