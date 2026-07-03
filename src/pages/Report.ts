@@ -131,18 +131,26 @@ export class ReportPage extends PostLoginSinglePostViewPage {
   }
 
   /**
-   * A known, stable post authored by someone else ("testprem", "txt
-   * 1782810063746"), tagged "AmericanAirlines". Chosen because it has
-   * consistently ranked as the very FIRST card on the Trending feed across
-   * every live run observed so far — a lower-traffic post (e.g. one with
-   * just 1 comment) can fall off the first page of a popularity-sorted feed,
-   * which is what broke the previous choice. Using a fixed slug instead of
-   * matching a feed card's link text also avoids the link's accessible name
-   * embedding live comment/vote counts, which change between runs and break
-   * a text-based match.
+   * Known, stable posts authored by someone else, all consistently ranked
+   * near the top of the Trending feed across every live run observed so
+   * far. KNOWN_POST_PATH/KNOWN_TOPIC_PATH are used by tests that only OPEN
+   * the Report modal (never submit). SUBMIT_TARGET_A/B/C are three
+   * DIFFERENT posts, one per test that actually clicks Submit (Steps 8, 9,
+   * 13): reusing a single post across multiple real submissions piled up
+   * enough reports within one run to trip this app's apparent
+   * auto-hide-after-N-reports moderation — a submit on a heavily-reported
+   * post redirected straight to /content-unavailable instead of showing a
+   * confirmation. Spreading submissions across different posts avoids that.
+   * (Note: since these ARE real submissions, re-running the suite enough
+   * times will eventually accumulate reports on these too — see docs/Report.md's
+   * own "Cleanup considerations" note about this being inherent to testing
+   * Report without disposable seeded content.)
    */
   static readonly KNOWN_POST_PATH = '/post/-13';
   static readonly KNOWN_TOPIC_PATH = '/tags/AmericanAirlines';
+  static readonly SUBMIT_TARGET_A = '/post/-13';
+  static readonly SUBMIT_TARGET_B = '/post/-12';
+  static readonly SUBMIT_TARGET_C = '/post/-10';
 
   /**
    * Navigates to a URL, tolerating net::ERR_ABORTED — the SPA frequently
@@ -161,11 +169,12 @@ export class ReportPage extends PostLoginSinglePostViewPage {
     await this.page.waitForLoadState('domcontentloaded');
   }
 
-  /** Opens the known reportable post directly by URL. */
-  async openKnownPost(): Promise<void> {
-    await this.safeGoto(`https://staging.talktravel.com${ReportPage.KNOWN_POST_PATH}`);
+  /** Opens a known reportable post directly by URL (defaults to KNOWN_POST_PATH). */
+  async openKnownPost(path: string = ReportPage.KNOWN_POST_PATH): Promise<void> {
+    await this.safeGoto(`https://staging.talktravel.com${path}`);
     await this.dismissCookieBanner();
     await this.waitForPageLoad();
+    await this.page.waitForLoadState('networkidle', { timeout: 15000 }).catch(() => {});
   }
 
   /** Reaches the known reportable post via the Homepage feed link (exercises that entry surface). */
@@ -174,6 +183,7 @@ export class ReportPage extends PostLoginSinglePostViewPage {
     await this.page.locator(`a[href="${ReportPage.KNOWN_POST_PATH}"]`).first().click();
     await this.page.waitForURL('**/post/**');
     await this.waitForPageLoad();
+    await this.page.waitForLoadState('networkidle', { timeout: 15000 }).catch(() => {});
   }
 
   /** Reaches the known reportable post via its Topic page (exercises that entry surface). */
@@ -184,6 +194,7 @@ export class ReportPage extends PostLoginSinglePostViewPage {
     await this.page.locator(`a[href="${ReportPage.KNOWN_POST_PATH}"]`).first().click();
     await this.page.waitForURL('**/post/**');
     await this.waitForPageLoad();
+    await this.page.waitForLoadState('networkidle', { timeout: 15000 }).catch(() => {});
   }
 
   /** Opens "Post options" on the currently-open Single Post View — always available there, no hover needed. */

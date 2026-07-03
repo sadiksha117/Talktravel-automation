@@ -123,7 +123,7 @@ test.describe('Report — Happy Path (positive only)', () => {
   // ── Step 8: Submit Report with Reason only ──────────────────────────────────
 
   test('Step 8 — Submitting a report with only a Reason shows a confirmation and closes the modal', async () => {
-    await flow.openKnownPost();
+    await flow.openKnownPost(ReportPage.SUBMIT_TARGET_A);
     await flow.openPostOptionsMenu();
     await flow.openReportModal();
 
@@ -138,7 +138,7 @@ test.describe('Report — Happy Path (positive only)', () => {
   // ── Step 9: Submit Report with Reason + Additional details ─────────────────
 
   test('Step 9 — Submitting a report with Reason and Additional details shows a confirmation and closes the modal', async () => {
-    await flow.openKnownPost();
+    await flow.openKnownPost(ReportPage.SUBMIT_TARGET_B);
     await flow.openPostOptionsMenu();
     await flow.openReportModal();
 
@@ -154,7 +154,7 @@ test.describe('Report — Happy Path (positive only)', () => {
   // ── Step 13: Reported content stays visible after reload ───────────────────
 
   test('Step 13 — Reported post remains visible after a page reload', async ({ page }) => {
-    await flow.openKnownPost();
+    await flow.openKnownPost(ReportPage.SUBMIT_TARGET_C);
     await flow.openPostOptionsMenu();
     await flow.openReportModal();
 
