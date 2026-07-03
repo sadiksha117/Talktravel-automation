@@ -29,16 +29,16 @@ import { PostLoginSinglePostViewPage } from './PostLoginSinglePostView';
  * required on posts — tests should pick a non-"Other" reason unless
  * specifically testing that.
  *
- * Post-report tests navigate to a KNOWN, stable post (KNOWN_POST_PATH below,
- * from the recordings) rather than scanning the feed for a reportable one.
- * Scanning required hovering each feed card to reveal "Post options" (it's
- * conditionally RENDERED there, not just CSS-hidden — confirmed by comparing
- * two live snapshots of the same post: unhovered showed no trace of it,
- * hovered showed it right in the link's accessible name), which proved too
- * timing-sensitive across many live runs. "Post options" on a post's OWN
- * page never needed hovering and was reliable in every run, so tests open
- * the known post directly (optionally via the feed/a topic page to still
- * exercise that entry point) and use it there instead.
+ * Post-report tests scan the CURRENT feed/topic listing for a reportable
+ * post rather than depending on any single hardcoded slug. Two earlier
+ * approaches broke: hovering a feed card to reveal ITS OWN "Post options" is
+ * conditionally rendered (not just CSS-hidden) and proved too
+ * timing-sensitive across many live runs; and hardcoding specific posts
+ * broke once this app appears to remove/hide a post from the feed after it
+ * gets reported — a fixed target eventually "uses itself up". Opening each
+ * candidate for real (a normal navigation, no hover involved) and checking
+ * "Post options" on ITS OWN page has been reliable in every run regardless
+ * of which post it is, and self-heals when a specific post stops working.
  */
 export class ReportPage extends PostLoginSinglePostViewPage {
   // "Report" trigger — a plain button ("Report Post" / "Report Reply"), not
@@ -131,75 +131,45 @@ export class ReportPage extends PostLoginSinglePostViewPage {
   }
 
   /**
-   * Known, stable posts authored by someone else, all consistently ranked
-   * near the top of the Trending feed across every live run observed so
-   * far. KNOWN_POST_PATH/KNOWN_TOPIC_PATH are used by tests that only OPEN
-   * the Report modal (never submit). SUBMIT_TARGET_A/B/C are three
-   * DIFFERENT posts, one per test that actually clicks Submit (Steps 8, 9,
-   * 13): reusing a single post across multiple real submissions piled up
-   * enough reports within one run to trip this app's apparent
-   * auto-hide-after-N-reports moderation — a submit on a heavily-reported
-   * post redirected straight to /content-unavailable instead of showing a
-   * confirmation. Spreading submissions across different posts avoids that.
-   * (Note: since these ARE real submissions, re-running the suite enough
-   * times will eventually accumulate reports on these too — see docs/Report.md's
-   * own "Cleanup considerations" note about this being inherent to testing
-   * Report without disposable seeded content.)
+   * Real post title links on the current listing page (feed or topic page).
+   * Excludes /post/-N placeholder ids — PostLoginSinglePostViewPage's own
+   * openFirstPost() already documents these as unreliable/hidden, which
+   * matches what broke here when they were hardcoded as "known stable" posts.
    */
-  static readonly KNOWN_POST_PATH = '/post/-13';
-  static readonly KNOWN_TOPIC_PATH = '/tags/AmericanAirlines';
-  static readonly SUBMIT_TARGET_A = '/post/-13';
-  static readonly SUBMIT_TARGET_B = '/post/-12';
-  static readonly SUBMIT_TARGET_C = '/post/-10';
+  private postTitleLinks(): Locator {
+    return this.page.locator('a[href^="/post/"]:not([href^="/post/-"])').filter({ visible: true });
+  }
 
   /**
-   * Navigates to a URL, tolerating net::ERR_ABORTED — the SPA frequently
-   * aborts an in-flight navigation when its router redirects (same benign
-   * pattern already handled by PostLoginHomepagePage.safeGoto / goToTrending
-   * below), so a plain page.goto() here intermittently threw.
+   * Scans the current listing's real posts, opening each one for real and
+   * checking "Post options" → "Report Post" on ITS OWN page (own-authored
+   * posts show Edit/Delete instead, so this also filters by authorship).
+   * Leaves the found post's menu OPEN with "Report Post" visible, ready for
+   * openReportModal(). Call goToTrending() / navigate to a topic page first.
    */
-  private async safeGoto(url: string): Promise<void> {
-    try {
-      await this.page.goto(url, { waitUntil: 'domcontentloaded' });
-    } catch (e) {
-      const msg = String(e);
-      const benign = msg.includes('ERR_ABORTED') || msg.includes('interrupted by another navigation');
-      if (!benign) throw e;
+  async openReportablePostFromListing(maxTries = 10): Promise<void> {
+    const titleLinks = this.postTitleLinks();
+    const count = await titleLinks.count();
+    const tries = Math.min(count, maxTries);
+    for (let i = 0; i < tries; i++) {
+      const link = titleLinks.nth(i);
+      await link.scrollIntoViewIfNeeded().catch(() => {});
+      const opened = await link.click({ timeout: 5000 }).then(() => true).catch(() => false);
+      if (!opened) continue;
+      await this.page.waitForURL('**/post/**', { timeout: 10000 }).catch(() => {});
+      await this.waitForPageLoad();
+      await this.page.waitForLoadState('networkidle', { timeout: 15000 }).catch(() => {});
+
+      const trigger = this.page.getByRole('button', { name: 'Post options' }).or(this.postMoreBtn).first();
+      const menuOpened = await trigger.click({ timeout: 5000 }).then(() => true).catch(() => false);
+      if (menuOpened && (await this.reportAction.isVisible({ timeout: 2000 }).catch(() => false))) {
+        return;
+      }
+      await this.page.keyboard.press('Escape').catch(() => {});
+      await this.page.goBack({ waitUntil: 'domcontentloaded' }).catch(() => {});
+      await this.waitForPageLoad();
     }
-    await this.page.waitForLoadState('domcontentloaded');
-  }
-
-  /** Opens a known reportable post directly by URL (defaults to KNOWN_POST_PATH). */
-  async openKnownPost(path: string = ReportPage.KNOWN_POST_PATH): Promise<void> {
-    await this.safeGoto(`https://staging.talktravel.com${path}`);
-    await this.dismissCookieBanner();
-    await this.waitForPageLoad();
-    await this.page.waitForLoadState('networkidle', { timeout: 15000 }).catch(() => {});
-  }
-
-  /** Reaches the known reportable post via the Homepage feed link (exercises that entry surface). */
-  async openKnownPostFromFeed(): Promise<void> {
-    await this.goToTrending();
-    await this.page.locator(`a[href="${ReportPage.KNOWN_POST_PATH}"]`).first().click();
-    await this.page.waitForURL('**/post/**');
-    await this.waitForPageLoad();
-    await this.page.waitForLoadState('networkidle', { timeout: 15000 }).catch(() => {});
-  }
-
-  /** Reaches the known reportable post via its Topic page (exercises that entry surface). */
-  async openKnownPostFromTopic(): Promise<void> {
-    await this.safeGoto(`https://staging.talktravel.com${ReportPage.KNOWN_TOPIC_PATH}`);
-    await this.dismissCookieBanner();
-    await this.waitForPageLoad();
-    await this.page.locator(`a[href="${ReportPage.KNOWN_POST_PATH}"]`).first().click();
-    await this.page.waitForURL('**/post/**');
-    await this.waitForPageLoad();
-    await this.page.waitForLoadState('networkidle', { timeout: 15000 }).catch(() => {});
-  }
-
-  /** Opens "Post options" on the currently-open Single Post View — always available there, no hover needed. */
-  async openPostOptionsMenu(): Promise<void> {
-    await this.page.getByRole('button', { name: 'Post options' }).or(this.postMoreBtn).first().click();
+    throw new Error('Could not find any reportable post in the current listing.');
   }
 
   /**
@@ -229,7 +199,7 @@ export class ReportPage extends PostLoginSinglePostViewPage {
    */
   async findReportableCommentAcrossPosts(opts: { fromEnd?: boolean; maxPosts?: number } = {}): Promise<Locator> {
     await this.goToTrending();
-    const titleLinks = this.page.locator('a[href^="/post/"]:not([href^="/post/-"])').filter({ visible: true });
+    const titleLinks = this.postTitleLinks();
     const count = await titleLinks.count();
     const maxPosts = opts.maxPosts ?? 5;
     const tries = Math.min(count, maxPosts);
@@ -262,6 +232,23 @@ export class ReportPage extends PostLoginSinglePostViewPage {
       }
     }
     await this.dismissCookieBanner();
+    await this.page.waitForLoadState('networkidle', { timeout: 15000 }).catch(() => {});
+  }
+
+  /** Navigates to the Trending feed, then into the first available topic/tag page. */
+  async goToFirstTopicPage(): Promise<void> {
+    await this.goToTrending();
+    // a[href^="/tags/"] also matches the (hidden) nav-dropdown topic list, so
+    // scope to a visible chip and exclude that dropdown — same fix already
+    // applied to topicChip in PostLoginSinglePostViewPage.
+    const topicChip = this.page
+      .locator('a.tag-default[href*="/tags/"]')
+      .or(this.page.locator('a[href^="/tags/"]:not(.nav-dropdown-link):not(.dropdown-item)').filter({ visible: true }))
+      .first();
+    await topicChip.waitFor({ state: 'visible' });
+    await topicChip.click();
+    await this.page.waitForURL('**/tags/**');
+    await this.waitForPageLoad();
     await this.page.waitForLoadState('networkidle', { timeout: 15000 }).catch(() => {});
   }
 
