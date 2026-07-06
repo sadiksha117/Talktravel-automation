@@ -120,6 +120,11 @@ test.describe('Report (Post / Comment / Reply) — Happy Path', () => {
     await page.getByRole('textbox', { name: 'Email, username, or phone *' }).fill(VALID_EMAIL);
     await page.getByRole('textbox', { name: 'Password * Forgot password?' }).fill(VALID_PASSWORD);
     await page.getByRole('button', { name: 'Log In' }).click();
+    // Without this wait, the test's own page.goto('/trending') can fire before
+    // the login request resolves and land on an unauthenticated feed — see
+    // PostLoginHomepagePage.login() for the same pattern.
+    await page.waitForURL(/staging\.talktravel\.com\/.+/);
+    await page.waitForLoadState('domcontentloaded');
   });
 
   test('Report a Post from Homepage feed', async ({ page }) => {
