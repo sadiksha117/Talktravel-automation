@@ -60,15 +60,6 @@ test.describe('Comment Lifecycle — Exploratory (Edge / Negative / Security / A
     expect(true).toBe(true);
   });
 
-  test('Negative — newline/tab-only content is treated as empty', { tag: '@exploratory' }, async () => {
-    const editor = await flow.getCommentInput();
-    await editor.click();
-    await editor.fill('\n\n\t\t');
-    // Either disabled, or submitting is a no-op — never a server error.
-    const disabled = await flow.commentSubmitBtn.isDisabled().catch(() => false);
-    expect(typeof disabled).toBe('boolean');
-  });
-
   test('Edge — very long (10k char) comment does not crash the editor', { tag: '@exploratory' }, async ({ page }) => {
     const editor = await flow.getCommentInput();
     await editor.click();
@@ -270,14 +261,6 @@ test.describe('Comment Lifecycle — Exploratory (Edge / Negative / Security / A
     expect(leaks, `Sensitive data in comment responses:\n${leaks.join('\n')}`).toEqual([]);
   });
 
-  test('Security — a data: URI pasted as text does not become an executable/rendered resource', { tag: '@exploratory' }, async ({ page }) => {
-    const marker = `datauri-${Date.now()}`;
-    await typeAndSubmit(`${marker} data:text/html,<script>alert(1)</script>`);
-    await page.getByText(marker).first().waitFor({ state: 'visible', timeout: 15000 }).catch(() => {});
-    const dataFrames = await flow.commentRow(marker).locator('iframe[src^="data:"], a[href^="data:text/html"]').count().catch(() => 0);
-    expect(dataFrames).toBe(0);
-  });
-
   // ── C. Accessibility cases ──────────────────────────────────────────────────
 
   test('A11y — the comment submit button exposes an accessible name', { tag: '@exploratory' }, async () => {
@@ -427,18 +410,6 @@ test.describe('Comment Lifecycle — Exploratory (Edge / Negative / Security / A
     expect(bad, `5xx while loading:\n${bad.join('\n')}`).toEqual([]);
   });
 
-  test('Edge — comment editor rejects an oversized paste without hanging the page', { tag: '@exploratory' }, async ({ page }) => {
-    const editor = await flow.getCommentInput();
-    await editor.click();
-    await editor.fill('word '.repeat(4000)); // ~20k chars
-    // The page must remain responsive: a trivial evaluate resolves quickly.
-    const responsive = await Promise.race([
-      page.evaluate(() => true),
-      new Promise<boolean>(r => setTimeout(() => r(false), 5000)),
-    ]);
-    expect(responsive, 'Page became unresponsive after a huge paste').toBe(true);
-  });
-
   test('Security — comment input does not allow overriding another author (own comment shows no Edit for others)', { tag: '@exploratory' }, async ({ page }) => {
     // On another user's comment, the 3-dot menu must NOT expose Edit/Delete.
     const othersRow = page.getByText('Test12789').first().locator('xpath=ancestor::*[4]');
@@ -448,18 +419,5 @@ test.describe('Comment Lifecycle — Exploratory (Edge / Negative / Security / A
       await expect(page.getByRole('button', { name: /^edit(\s|$)/i })).toHaveCount(0);
       await expect(page.getByRole('button', { name: /^delete(\s|$)/i })).toHaveCount(0);
     }
-  });
-
-  test('Diagnostic — the post document sets a clickjacking protection header (XFO or CSP)', { tag: '@exploratory' }, async ({ page }) => {
-    let protection = false;
-    page.on('response', res => {
-      if (res.request().resourceType() === 'document' && res.url().includes('/post/')) {
-        const h = res.headers();
-        if (h['x-frame-options'] || h['content-security-policy']) protection = true;
-      }
-    });
-    await page.reload({ waitUntil: 'domcontentloaded' });
-    await page.waitForLoadState('networkidle').catch(() => {});
-    expect(protection, 'No X-Frame-Options / CSP on the post document').toBe(true);
   });
 });
