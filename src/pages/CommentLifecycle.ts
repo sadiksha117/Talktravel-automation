@@ -35,6 +35,8 @@ export class CommentLifecyclePage extends PostLoginSinglePostViewPage {
   readonly editSaveBtn: Locator;
   readonly deleteDialog: Locator;
   readonly deleteConfirmBtn: Locator;
+  readonly deleteCancelBtn: Locator;
+  readonly inlineCancelBtn: Locator;
   readonly editedLabel: Locator;
 
   constructor(page: Page) {
@@ -58,6 +60,13 @@ export class CommentLifecyclePage extends PostLoginSinglePostViewPage {
     this.editSaveBtn      = page.getByRole('button', { name: /^(update|save)$/i }).first();
     this.deleteDialog     = page.getByRole('dialog');
     this.deleteConfirmBtn = page.getByRole('button', { name: /^(remove|delete)$/i }).last();
+    // Cancel inside the delete confirmation modal — scoped to the dialog so it
+    // never resolves to the top-level comment editor's Cancel.
+    this.deleteCancelBtn  = this.deleteDialog.getByRole('button', { name: /^cancel$/i });
+    // Cancel for an inline reply/edit form. The top-level comment editor's
+    // Cancel is always present and comes FIRST in the DOM; the inline form is
+    // opened afterwards, so its Cancel is the LAST one on the page.
+    this.inlineCancelBtn  = page.getByRole('button', { name: /^cancel$/i }).last();
     this.editedLabel      = page.locator('text=/Edited/i');
   }
 

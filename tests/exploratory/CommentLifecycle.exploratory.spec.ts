@@ -20,7 +20,9 @@ const BASE           = 'https://staging.talktravel.com';
 test.describe('Comment Lifecycle — Exploratory (Edge / Negative / Security / A11y)', () => {
   let flow: CommentLifecyclePage;
 
-  test.setTimeout(180000);
+  // 4 min: a fresh login + openFirstPost + the self-healing editor reload-retry
+  // can approach the old 180s budget on slow staging responses.
+  test.setTimeout(240000);
 
   test.beforeEach(async ({ page }) => {
     flow = new CommentLifecyclePage(page);
@@ -98,7 +100,8 @@ test.describe('Comment Lifecycle — Exploratory (Edge / Negative / Security / A
     const replyInput = flow.activeInlineEditor();
     await replyInput.waitFor({ state: 'visible', timeout: 8000 });
     await replyInput.fill(discard);
-    await page.getByRole('button', { name: /^cancel$/i }).first().click();
+    // Scoped Cancel — .first() would hit the top-level comment editor's Cancel.
+    await flow.inlineCancelBtn.click();
     await expect(page.getByText(discard)).toHaveCount(0);
   });
 
@@ -109,7 +112,7 @@ test.describe('Comment Lifecycle — Exploratory (Edge / Negative / Security / A
     await flow.openCommentMenu(row);
     await flow.menuEditItem.click();
     await flow.activeInlineEditor().fill('THIS SHOULD BE DISCARDED');
-    await page.getByRole('button', { name: /^cancel$/i }).first().click();
+    await flow.inlineCancelBtn.click();
     await expect(page.getByText(original)).toBeVisible();
     await expect(page.getByText('THIS SHOULD BE DISCARDED')).toHaveCount(0);
   });
@@ -119,7 +122,8 @@ test.describe('Comment Lifecycle — Exploratory (Edge / Negative / Security / A
     await flow.addTopLevelComment(keep); // setup
     await flow.openCommentMenu(flow.commentRow(keep));
     await flow.menuDeleteItem.click();
-    await page.getByRole('button', { name: /^cancel$/i }).first().click();
+    // Scoped to the dialog — the page also has the top-level editor's Cancel.
+    await flow.deleteCancelBtn.click();
     await expect(page.getByText(keep)).toBeVisible();
   });
 

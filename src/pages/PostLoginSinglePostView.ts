@@ -186,6 +186,11 @@ export class PostLoginSinglePostViewPage extends BasePage {
   // and wait for it to flip to contenteditable=true. Returns the editor Locator
   // on success, or null if it never activated this pass.
   private async probeCommentEditor(): Promise<Locator | null> {
+    // Fail fast with a clear message if the page was already torn down (e.g. an
+    // upstream test timeout) rather than a cryptic "Target page ... closed".
+    if (this.page.isClosed()) {
+      throw new Error('Page already closed before probing the comment editor (likely an upstream timeout or crash).');
+    }
     await this.page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
 
     const quill = this.page.locator('.ql-editor').first();
