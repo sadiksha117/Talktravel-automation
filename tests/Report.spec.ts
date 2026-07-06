@@ -73,4 +73,35 @@ test.describe('Report (Post / Reply) — Happy Path', () => {
     // TODO: same as above, confirm the actual success confirmation locator/copy.
     await expect(page.getByRole('alert')).toBeVisible();
   });
+
+  test('Report a Comment', async ({ page }) => {
+    // Navigates by stable URL/href instead of matching a link's full
+    // accessible name (which embeds the live comment count and goes stale).
+    await page.goto('https://staging.talktravel.com/post/-13');
+
+    // TODO: confirm the real accessible name for a top-level comment's
+    // "more options" trigger, and confirm which comment row is actually
+    // reportable (not authored by the logged-in account) — this targets the
+    // first comment row as a starting point. Also confirm whether the
+    // Report button reads "Report Reply" here too (CommentLifecyclePage
+    // found Edit/Delete use "Edit Reply"/"Delete Reply" for BOTH top-level
+    // comments and nested replies, so Report may follow the same pattern)
+    // or something else like "Report Comment".
+    await page.getByRole('button', { name: 'More options' }).first().click();
+    await page.getByRole('button', { name: 'Report Reply' }).click();
+
+    const commentReportDialog = page.getByRole('dialog');
+    await expect(commentReportDialog).toBeVisible();
+
+    await page.locator('.custom-select__input-container').click();
+    await page.getByRole('option', { name: 'Other' }).click();
+
+    await page.getByRole('textbox', { name: 'Please provide details about' }).fill('idk');
+    await page.getByRole('button', { name: 'Submit' }).click();
+
+    await expect(commentReportDialog).not.toBeVisible();
+
+    // TODO: confirm the real locator/copy for the success confirmation.
+    await expect(page.getByRole('alert')).toBeVisible();
+  });
 });
