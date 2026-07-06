@@ -46,6 +46,9 @@ async function selectReason(page: Page, name: string): Promise<void> {
  */
 async function openReportablePostMenu(page: Page): Promise<void> {
   const postOptionsButtons = page.getByRole('button', { name: 'Post options' });
+  // The feed list renders asynchronously after navigation; without this wait,
+  // count() can run before React has hydrated any cards and return 0.
+  await postOptionsButtons.first().waitFor({ state: 'visible', timeout: 15000 });
   const count = await postOptionsButtons.count();
   for (let i = 0; i < count; i++) {
     await postOptionsButtons.nth(i).click();
@@ -62,6 +65,7 @@ async function openReportablePostMenu(page: Page): Promise<void> {
  */
 async function openReportablePostOwnPage(page: Page): Promise<void> {
   const titleLinks = page.locator('a.feed-post-title-link, a.feed-post-link-overlay');
+  await titleLinks.first().waitFor({ state: 'visible', timeout: 15000 });
   const count = await titleLinks.count();
   for (let i = 0; i < count; i++) {
     await titleLinks.nth(i).click();
@@ -106,6 +110,11 @@ async function openReportableCommentMenu(page: Page, scope: 'comment' | 'reply')
 }
 
 test.describe('Report (Post / Comment / Reply) — Happy Path', () => {
+  // Scanning several posts/comments for a reportable one (each candidate
+  // costs a click + short wait) can exceed Playwright's 30s default,
+  // especially for tests that scan twice (post, then a comment/reply).
+  test.setTimeout(120000);
+
   test.beforeEach(async ({ page }) => {
     await page.goto('https://staging.talktravel.com/login');
     await page.getByRole('textbox', { name: 'Email, username, or phone *' }).fill(VALID_EMAIL);
