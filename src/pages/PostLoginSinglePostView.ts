@@ -163,22 +163,26 @@ export class PostLoginSinglePostViewPage extends BasePage {
   // occasional "Please login" / not-hydrated state by reloading the post and
   // re-probing, rather than failing the test outright.
   async getCommentInput(): Promise<Locator> {
-    for (let pass = 1; pass <= 3; pass++) {
+    for (let pass = 1; pass <= 4; pass++) {
       const editor = await this.probeCommentEditor();
       if (editor) return editor;
+      if (pass >= 4) break;
 
-      // Editor didn't activate (often a hydration race where the app hasn't
-      // re-read the auth token yet). Reload the post and try again — cookies /
-      // sessionStorage survive a reload, so this recovers the authed state.
-      if (pass < 3) {
+      // Editor didn't activate (usually a hydration race where the app hasn't
+      // re-read the auth token yet). Escalating recovery:
+      //   passes 1-2 → reload the post (cookies/sessionStorage survive a reload)
+      //   pass 3     → re-navigate to a fresh post entirely (heavier reset)
+      if (pass <= 2) {
         await this.page.reload({ waitUntil: 'domcontentloaded' }).catch(() => {});
         await this.page.waitForLoadState('networkidle', { timeout: 20000 }).catch(() => {});
+      } else {
+        await this.openFirstPost().catch(() => {});
       }
     }
 
     throw new Error(
       'Comment input not found or still showing "Please login" placeholder. ' +
-      'The Quill editor did not activate after reload+retry — check auth state on the post page.'
+      'The Quill editor did not activate after reload + fresh-navigation retries — check auth state on the post page.'
     );
   }
 
