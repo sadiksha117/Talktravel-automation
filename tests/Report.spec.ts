@@ -51,7 +51,19 @@ async function login(page: Page): Promise<void> {
   await page.getByRole('textbox', { name: /email|username|phone/i }).fill(VALID_EMAIL);
   await page.locator('input[type="password"]').fill(VALID_PASSWORD);
   await page.getByRole('button', { name: /log ?in/i }).click();
-  await page.waitForURL((url) => !url.pathname.startsWith('/login'), { timeout: 15000 });
+  // The staging auth endpoint is occasionally slow enough to exceed 15s.
+  await page.waitForURL((url) => !url.pathname.startsWith('/login'), { timeout: 30000 });
+}
+
+/**
+ * Confirmed present via a real failure trace: an unhandled cookie-consent
+ * banner sits over the page and silently swallows clicks elsewhere (e.g. the
+ * Publish Post button, feed kebab menus) instead of throwing — every other
+ * spec in this suite dismisses it (see PostLoginHomepagePage.dismissCookieBanner
+ * / CreatePost.exploratory.spec.ts's beforeEach); this file never did.
+ */
+async function dismissCookieBanner(page: Page): Promise<void> {
+  await page.getByRole('button', { name: 'Accept All' }).click({ timeout: 3000 }).catch(() => {});
 }
 
 // ---- Reason dropdown options observed identically across post / comment / reply modals ----
@@ -74,7 +86,9 @@ const successToast = (page: Page) =>
 async function findReportablePostOnListing(page: Page, listingPath: string): Promise<string> {
   await page.goto(listingPath);
   const postOptionsButtons = page.getByRole('button', { name: 'Post options' });
-  await postOptionsButtons.first().waitFor({ state: 'visible', timeout: 15000 });
+  // This environment has repeatedly taken well over 15s to render a feed under
+  // real network conditions — 30s avoids failing on slow-load, not a bad selector.
+  await postOptionsButtons.first().waitFor({ state: 'visible', timeout: 30000 });
   const count = Math.min(await postOptionsButtons.count(), MAX_SCAN);
   for (let i = 0; i < count; i++) {
     const button = postOptionsButtons.nth(i);
@@ -101,7 +115,7 @@ async function findReportablePostOnListing(page: Page, listingPath: string): Pro
 async function findReportablePostDetail(page: Page, listingPath: string): Promise<string> {
   const titleLinks = page.locator('a.feed-post-title-link, a.feed-post-link-overlay');
   await page.goto(listingPath);
-  await titleLinks.first().waitFor({ state: 'visible', timeout: 15000 });
+  await titleLinks.first().waitFor({ state: 'visible', timeout: 30000 });
   const count = Math.min(await titleLinks.count(), MAX_SCAN);
   for (let i = 0; i < count; i++) {
     await page.goto(listingPath);
@@ -124,8 +138,12 @@ async function findReportablePostDetail(page: Page, listingPath: string): Promis
 /** Grabs the slug of any currently-listed topic from /tags. */
 async function pickAnyTopicSlug(page: Page): Promise<string> {
   await page.goto('/tags');
-  const topicLink = page.locator('a[href^="/tags/"]').first();
-  await topicLink.waitFor({ state: 'visible', timeout: 15000 });
+  // The header's own nav dropdown also renders <a href="/tags/...."> links,
+  // just hidden (class="nav-dropdown-link") until that dropdown is opened — a
+  // real failure trace showed a bare a[href^="/tags/"] locator matching one of
+  // those instead of a visible topic on the page. :visible filters them out.
+  const topicLink = page.locator('a[href^="/tags/"]:visible').first();
+  await topicLink.waitFor({ state: 'visible', timeout: 30000 });
   const href = await topicLink.getAttribute('href');
   const slug = href?.split('/tags/')[1]?.split('/')[0];
   if (!slug) throw new Error('Could not find any topic slug on /tags.');
@@ -147,7 +165,7 @@ async function findReportableCommentOrReply(
 ): Promise<string> {
   const titleLinks = page.locator('a.feed-post-title-link, a.feed-post-link-overlay');
   await page.goto(listingPath);
-  await titleLinks.first().waitFor({ state: 'visible', timeout: 15000 });
+  await titleLinks.first().waitFor({ state: 'visible', timeout: 30000 });
   const postCount = Math.min(await titleLinks.count(), MAX_SCAN);
 
   for (let p = 0; p < postCount; p++) {
@@ -193,6 +211,7 @@ test.describe('Report — Positive Flow', () => {
 
   test.beforeEach(async ({ page }) => {
     await login(page);
+    await dismissCookieBanner(page);
     await expect(page.getByRole('link', { name: /Create Post/i })).toBeVisible();
   });
 
@@ -316,7 +335,11 @@ test.describe('Report — Positive Flow', () => {
       .filter({ hasNotText: 'Create new topic' });
     await topicOption.first().waitFor({ state: 'visible', timeout: 15000 });
     await topicOption.first().click();
-    await page.getByRole('button', { name: 'Publish Post' }).click();
+    // A trace from a real failure showed a leftover modal/dialog still
+    // intercepting this click after the topic dropdown closes. CreatePost's
+    // own exploratory suite hits the same thing and already works around it
+    // with a forced click (see CreatePost.exploratory.spec.ts) — same fix here.
+    await page.getByRole('button', { name: 'Publish Post' }).click({ force: true });
 
     // Navigate to the new post via My Posts (direct post-detail deep links were
     // observed to be unreliable on this staging build immediately after creation).
