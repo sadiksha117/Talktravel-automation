@@ -85,16 +85,34 @@ export class LeftNavFollowedPostsPage extends BasePage {
   }
 
   /**
+   * Navigate to a URL, tolerating net::ERR_ABORTED. The SPA frequently
+   * aborts an in-flight navigation when its router redirects (e.g. visiting
+   * /trending right after login, or while already authenticated) — that
+   * abort is benign, the app lands on the correct page regardless. Same
+   * pattern as PostLoginHomepagePage.safeGoto.
+   */
+  async safeGoto(url: string): Promise<void> {
+    try {
+      await this.page.goto(url, { waitUntil: 'domcontentloaded' });
+    } catch (e) {
+      const msg = String(e);
+      const benign = msg.includes('ERR_ABORTED') || msg.includes('interrupted by another navigation');
+      if (!benign) throw e;
+    }
+    await this.page.waitForLoadState('domcontentloaded');
+  }
+
+  /**
    * Navigates via the left-nav link when present, else falls back to the
    * most likely candidate URL from the source doc (URL is unconfirmed).
    */
   async goToFollowedPosts(): Promise<void> {
     if (await this.followedPostsLink.isVisible({ timeout: 5000 }).catch(() => false)) {
       await this.followedPostsLink.click();
+      await this.page.waitForLoadState('domcontentloaded');
     } else {
-      await this.page.goto('https://staging.talktravel.com/followed-posts', { waitUntil: 'domcontentloaded' });
+      await this.safeGoto('https://staging.talktravel.com/followed-posts');
     }
-    await this.page.waitForLoadState('domcontentloaded');
     await this.waitForPageLoad();
   }
 
@@ -114,25 +132,38 @@ export class LeftNavFollowedPostsPage extends BasePage {
    * already confirmed (see PostLoginSinglePostViewPage).
    */
   async ensureFollowingAtLeastOnePost(): Promise<void> {
-    await this.page.goto('https://staging.talktravel.com/trending', { waitUntil: 'domcontentloaded' });
+    await this.safeGoto('https://staging.talktravel.com/trending');
     await this.waitForPageLoad();
     const firstCard = this.postCards.first();
     await firstCard.waitFor({ state: 'visible', timeout: 15000 });
     await firstCard.click();
-    await this.page.waitForURL('**/post/**');
+    await this.page.waitForURL('**/post/**', { timeout: 20000 });
     await this.waitForPageLoad();
+    // Give the post's action bar a moment to hydrate before probing it —
+    // the vote/follow buttons render after the initial paint.
+    await this.page.waitForTimeout(1000);
 
+    // Same 3-way fallback chain as the confirmed PostLoginSinglePostViewPage.
     const followBtn = this.page.locator('button[data-action="follow"], button[data-action="subscribe"]')
+      .or(this.page.locator('[class*="follow" i]:not([class*="following" i]) button').first())
       .or(this.page.getByRole('button', { name: /^follow$/i }).first())
       .first();
     const followingBtn = this.page.locator('button[data-action="unfollow"], button[data-action="unsubscribe"]')
       .or(this.page.getByRole('button', { name: /following|subscribed/i }).first())
       .first();
 
-    const isFollowing = await followingBtn.isVisible({ timeout: 3000 }).catch(() => false);
-    if (!isFollowing) {
-      await followBtn.click();
-      await followingBtn.waitFor({ state: 'visible', timeout: 10000 });
+    const isFollowing = await followingBtn.isVisible({ timeout: 5000 }).catch(() => false);
+    if (isFollowing) return;
+
+    const followVisible = await followBtn.isVisible({ timeout: 10000 }).catch(() => false);
+    if (!followVisible) {
+      throw new Error(
+        'Could not find a Follow/Following button on the opened post — the selector is ' +
+        'unconfirmed against the live app. Check test-results/**/error-context.md for the ' +
+        'real accessibility tree and update followBtn/followingBtn in LeftNavFollowedPosts.ts.'
+      );
     }
+    await followBtn.click();
+    await followingBtn.waitFor({ state: 'visible', timeout: 10000 });
   }
 }
