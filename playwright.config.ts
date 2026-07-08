@@ -1,5 +1,31 @@
-import 'dotenv/config';
 import { defineConfig, devices } from '@playwright/test';
+import { existsSync, readFileSync } from 'fs';
+import { join } from 'path';
+
+/**
+ * Minimal .env loader with no external dependency — the `dotenv` package
+ * broke on a machine whose node_modules hadn't been reinstalled after the
+ * package.json change ("Cannot find module 'dotenv/config'"). Reading the
+ * file directly means TEST_EMAIL/TEST_PASSWORD load the moment you pull,
+ * no npm install required.
+ */
+function loadEnvFile(path: string): void {
+  if (!existsSync(path)) return;
+  for (const line of readFileSync(path, 'utf-8').split('\n')) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith('#')) continue;
+    const eq = trimmed.indexOf('=');
+    if (eq === -1) continue;
+    const key = trimmed.slice(0, eq).trim();
+    let value = trimmed.slice(eq + 1).trim();
+    if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) {
+      value = value.slice(1, -1);
+    }
+    if (!(key in process.env)) process.env[key] = value;
+  }
+}
+
+loadEnvFile(join(__dirname, '.env'));
 
 export default defineConfig({
   testDir: './tests',
