@@ -5,14 +5,18 @@ import { BasePage } from './BasePage';
  * Page object for the Left Nav — Followed Posts (Post-Login) flow
  * (docs/Leftnav_followedpost.md).
  *
- * The left-nav link's exact container, the page URL, and the per-card
- * Follow/Unfollow toggle are unconfirmed against the live app — the source
- * doc itself lists the URL as one of several candidates. These use flexible
- * role/text locators with fallbacks, same convention as the unconfirmed
- * elements in EditPost.ts/DeletePost.ts ("Post options" 3-dot menu). Feed
- * card, vote, topic-chip and author-link selectors reuse the conventions
- * already confirmed in PostLoginHomepagePage, since this list shares the
- * same card structure as the Homepage feed.
+ * Left-nav link and URL confirmed from a live accessibility snapshot:
+ * link "Followed Posts" → /my/followed-posts/latest. The Single Post View's
+ * follow toggle is also confirmed as button "Follow this post" (not the bare
+ * "Follow" the doc assumed) — matched here with a word-boundary regex
+ * (/^follow\b/i) so it matches "Follow this post" while still excluding
+ * "Following this post"/"Unfollow this post" ("Follow" + "ing" has no word
+ * boundary between them). The per-card Follow/Unfollow toggle inside the
+ * Followed Posts list itself is still unconfirmed — same regex applied
+ * there on the assumption the site uses consistent wording. Feed card,
+ * vote, topic-chip and author-link selectors reuse the conventions already
+ * confirmed in PostLoginHomepagePage, since this list shares the same card
+ * structure as the Homepage feed.
  */
 export class LeftNavFollowedPostsPage extends BasePage {
   // Left nav
@@ -102,27 +106,24 @@ export class LeftNavFollowedPostsPage extends BasePage {
     await this.page.waitForLoadState('domcontentloaded');
   }
 
-  /**
-   * Navigates via the left-nav link when present, else falls back to the
-   * most likely candidate URL from the source doc (URL is unconfirmed).
-   */
+  /** Navigates via the left-nav link, falling back to its confirmed URL. */
   async goToFollowedPosts(): Promise<void> {
     if (await this.followedPostsLink.isVisible({ timeout: 5000 }).catch(() => false)) {
       await this.followedPostsLink.click();
       await this.page.waitForLoadState('domcontentloaded');
     } else {
-      await this.safeGoto('https://staging.talktravel.com/followed-posts');
+      await this.safeGoto('https://staging.talktravel.com/my/followed-posts/latest');
     }
     await this.waitForPageLoad();
   }
 
-  /** Follow/Following toggle scoped to a single feed card — unconfirmed selector. */
+  /** Follow/Unfollow toggle scoped to a single feed card. */
   followButtonOnCard(card: Locator): Locator {
-    return card.getByRole('button', { name: /^follow$/i });
+    return card.getByRole('button', { name: /^follow\b/i });
   }
 
   followingButtonOnCard(card: Locator): Locator {
-    return card.getByRole('button', { name: /^following$/i });
+    return card.getByRole('button', { name: /^(unfollow|following)\b/i });
   }
 
   /**
@@ -139,30 +140,15 @@ export class LeftNavFollowedPostsPage extends BasePage {
     await firstCard.click();
     await this.page.waitForURL('**/post/**', { timeout: 20000 });
     await this.waitForPageLoad();
-    // Give the post's action bar a moment to hydrate before probing it —
-    // the vote/follow buttons render after the initial paint.
-    await this.page.waitForTimeout(1000);
 
-    // Same 3-way fallback chain as the confirmed PostLoginSinglePostViewPage.
-    const followBtn = this.page.locator('button[data-action="follow"], button[data-action="subscribe"]')
-      .or(this.page.locator('[class*="follow" i]:not([class*="following" i]) button').first())
-      .or(this.page.getByRole('button', { name: /^follow$/i }).first())
-      .first();
-    const followingBtn = this.page.locator('button[data-action="unfollow"], button[data-action="unsubscribe"]')
-      .or(this.page.getByRole('button', { name: /following|subscribed/i }).first())
-      .first();
+    // Confirmed via live accessibility snapshot: button "Follow this post".
+    const followBtn = this.page.getByRole('button', { name: /^follow\b/i }).first();
+    const followingBtn = this.page.getByRole('button', { name: /^(unfollow|following)\b/i }).first();
 
     const isFollowing = await followingBtn.isVisible({ timeout: 5000 }).catch(() => false);
     if (isFollowing) return;
 
-    const followVisible = await followBtn.isVisible({ timeout: 10000 }).catch(() => false);
-    if (!followVisible) {
-      throw new Error(
-        'Could not find a Follow/Following button on the opened post — the selector is ' +
-        'unconfirmed against the live app. Check test-results/**/error-context.md for the ' +
-        'real accessibility tree and update followBtn/followingBtn in LeftNavFollowedPosts.ts.'
-      );
-    }
+    await followBtn.waitFor({ state: 'visible', timeout: 10000 });
     await followBtn.click();
     await followingBtn.waitFor({ state: 'visible', timeout: 10000 });
   }
