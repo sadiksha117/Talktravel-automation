@@ -26,10 +26,11 @@
  * setup can seed fresh qualifying content via API rather than relying on hardcoded,
  * possibly-stale staging data.
  *
- * AUTH STRATEGY: test.use({ storageState }) — a pre-authenticated storage state for the
- * reporter account (prempoudel72707@gmail.com) is expected at the path below. Generate it
- * once via `npx playwright codegen --save-storage=playwright/.auth/reporter.json` (logging
- * in manually), then reuse it here. This avoids typing credentials inside test code.
+ * AUTH STRATEGY: credentials come from TEST_EMAIL / TEST_PASSWORD env vars (via .env,
+ * same convention as CreatePost.spec.ts, DeletePost.spec.ts, EditPost.spec.ts and
+ * comment-lifecycle.spec.ts), defaulting to the reporter account (prempoudel72707@gmail.com)
+ * used to capture the target identifiers below. beforeEach logs in through the UI each run —
+ * no pre-generated storage state file is required.
  *
  * KNOWN ENVIRONMENT CAVEAT OBSERVED DURING MANUAL EXECUTION (documented, not asserted here):
  * Reporting a post/comment/reply on this staging build appears to hide it from listings and
@@ -39,9 +40,18 @@
  * underlying bug is fixed. See the QA summary notes delivered alongside this file.
  */
 
-import { test, expect } from '@playwright/test';
+import { test, expect, type Page } from '@playwright/test';
 
-test.use({ storageState: 'playwright/.auth/reporter.json' });
+const VALID_EMAIL    = process.env.TEST_EMAIL ?? 'prempoudel72707@gmail.com';
+const VALID_PASSWORD = process.env.TEST_PASSWORD ?? 'Admin@123';
+
+async function login(page: Page): Promise<void> {
+  await page.goto('https://staging.talktravel.com/login');
+  await page.getByRole('textbox', { name: /email|username|phone/i }).fill(VALID_EMAIL);
+  await page.locator('input[type="password"]').fill(VALID_PASSWORD);
+  await page.getByRole('button', { name: /log ?in/i }).click();
+  await page.waitForURL((url) => !url.pathname.startsWith('/login'), { timeout: 15000 });
+}
 
 // ---- Reason dropdown options observed identically across post / comment / reply modals ----
 const REASON_OPTIONS = ['Spam', 'Harassment', 'Misinformation', 'Inappropriate', 'Other'];
@@ -65,6 +75,7 @@ const REPLY_TEXT = process.env.REPORT_TEST_REPLY_TEXT ?? 'hello'; // koramo, nes
 
 test.describe('Report — Positive Flow', () => {
   test.beforeEach(async ({ page }) => {
+    await login(page);
     // Confirm authenticated session lands on the post-login home / trending feed.
     await page.goto('/trending');
     await expect(page).toHaveURL(/\/trending/);
