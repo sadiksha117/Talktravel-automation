@@ -101,9 +101,8 @@ test.describe('Left Nav — Followed Posts — Positive Flows', () => {
     await page.goto(`https://staging.talktravel.com${href}`, { waitUntil: 'domcontentloaded' });
     await followedPage.waitForPageLoad();
 
-    const followBtn = page.locator('button[data-action="follow"], button[data-action="subscribe"]')
-      .or(page.getByRole('button', { name: /^follow$/i }).first())
-      .first();
+    // Confirmed via live accessibility snapshot: button "Follow this post".
+    const followBtn = page.getByRole('button', { name: /^follow\b/i }).first();
     await expect(followBtn).toBeVisible();
   });
 
@@ -117,9 +116,7 @@ test.describe('Left Nav — Followed Posts — Positive Flows', () => {
 
     await page.goto(`https://staging.talktravel.com${href}`, { waitUntil: 'domcontentloaded' });
     await followedPage.waitForPageLoad();
-    const followBtn = page.locator('button[data-action="follow"], button[data-action="subscribe"]')
-      .or(page.getByRole('button', { name: /^follow$/i }).first())
-      .first();
+    const followBtn = page.getByRole('button', { name: /^follow\b/i }).first();
     await followBtn.click();
 
     await followedPage.goToFollowedPosts();
