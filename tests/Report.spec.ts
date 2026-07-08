@@ -229,9 +229,16 @@ test.describe('Report — Positive Flow', () => {
     const title = `Report guard test ${Date.now()}`;
 
     await page.goto('/create-post');
-    await page.getByLabel('Title').fill(title);
-    await page.getByPlaceholder('Type to search topics...').fill('Dubai');
-    await page.getByText('DXB-Dubai', { exact: false }).first().click();
+    // Confirmed accessible names/locators — same ones used successfully in
+    // src/pages/CreatePost.ts (selectTopic): the input is "Topics *", and the
+    // matching option renders inside a role=listbox, not a bare text node.
+    await page.getByRole('textbox', { name: 'Title *' }).fill(title);
+    const topicsInput = page.getByRole('textbox', { name: 'Topics *' });
+    await topicsInput.fill('DXB-Dubai');
+    const topicOption = page.getByRole('listbox').getByText('DXB-Dubai', { exact: true })
+      .filter({ hasNotText: 'Create new topic' });
+    await topicOption.first().waitFor({ state: 'visible', timeout: 15000 });
+    await topicOption.first().click();
     await page.getByRole('button', { name: 'Publish Post' }).click();
 
     // Navigate to the new post via My Posts (direct post-detail deep links were
