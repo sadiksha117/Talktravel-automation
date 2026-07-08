@@ -152,7 +152,11 @@ test.describe('Left Nav — Followed Posts — Positive Flows', () => {
   // ── Step 11: Click a topic chip inside a followed post ────────────────────
 
   test('Step 11 — clicking a topic chip navigates to /tags/{slug}', async ({ page }) => {
-    const topicChip = page.locator('a[href^="/tags/"]').first();
+    // Hidden mobile-nav dropdown links (a.nav-dropdown-link) share this href
+    // prefix and sit earlier in the DOM than the visible in-card chip, so
+    // :first() alone grabs a hidden one — :visible filters those out
+    // (confirmed live: locator resolved to a hidden nav-dropdown-link).
+    const topicChip = page.locator('a[href^="/tags/"]:visible').first();
     await topicChip.waitFor({ state: 'visible' });
     await topicChip.click();
     await expect(page).toHaveURL(/\/tags\/.+/);
@@ -161,7 +165,8 @@ test.describe('Left Nav — Followed Posts — Positive Flows', () => {
   // ── Step 12: Click an author username/avatar ──────────────────────────────
 
   test('Step 12 — clicking an author link navigates to the user profile', async ({ page }) => {
-    const authorLink = page.locator('a[href^="/profile/"]').first();
+    // Same hidden-dropdown-item issue as the topic chip above.
+    const authorLink = page.locator('a[href^="/profile/"]:visible').first();
     await authorLink.waitFor({ state: 'visible' });
     await authorLink.click();
     await expect(page).toHaveURL(/\/profile\/.+/);

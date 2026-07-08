@@ -51,11 +51,12 @@ export class LeftNavFollowedPostsPage extends BasePage {
 
     this.postOptionsBtn = page.getByRole('button', { name: 'Post options' }).first();
     this.menuReportPost = page.getByRole('button', { name: 'Report Post' });
-    this.menuEditPost = page.getByRole('button', { name: /^edit post$/i })
+    // Own posts show bare "Edit"/"Remove" per Report.spec.ts, not "Edit Post"/"Delete Post".
+    this.menuEditPost = page.getByRole('button', { name: /^edit( post)?$/i })
       .or(page.locator('[role="menuitem"]:has-text("Edit")'))
       .first();
-    this.menuDeletePost = page.getByRole('button', { name: /^delete post$/i })
-      .or(page.locator('[role="menuitem"]:has-text("Delete")'))
+    this.menuDeletePost = page.getByRole('button', { name: /^(delete|remove)( post)?$/i })
+      .or(page.locator('[role="menuitem"]:has-text("Delete"), [role="menuitem"]:has-text("Remove")'))
       .first();
   }
 
@@ -106,14 +107,22 @@ export class LeftNavFollowedPostsPage extends BasePage {
     await this.page.waitForLoadState('domcontentloaded');
   }
 
-  /** Navigates via the left-nav link, falling back to its confirmed URL. */
+  /**
+   * Navigates via the left-nav link, falling back to its confirmed URL.
+   * Explicitly waits for the URL to actually change to /my/followed-posts —
+   * a client-side link click in this SPA never re-fires 'load'/
+   * 'domcontentloaded', so waiting on those alone can return before the
+   * router has actually switched routes, leaving callers reading stale
+   * page state (confirmed live: page.url() came back as the previous
+   * post's URL immediately after this call).
+   */
   async goToFollowedPosts(): Promise<void> {
     if (await this.followedPostsLink.isVisible({ timeout: 5000 }).catch(() => false)) {
       await this.followedPostsLink.click();
-      await this.page.waitForLoadState('domcontentloaded');
     } else {
       await this.safeGoto('https://staging.talktravel.com/my/followed-posts/latest');
     }
+    await this.page.waitForURL(/\/my\/followed-posts/, { timeout: 15000 });
     await this.waitForPageLoad();
   }
 
