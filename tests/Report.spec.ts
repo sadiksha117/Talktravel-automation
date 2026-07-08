@@ -20,9 +20,16 @@
  * manual pass. Those went stale almost immediately — this staging environment's data
  * shifts between capture and run (and reporting a post appears to remove it from listings,
  * see caveat below), so a fixed slug reliably 404s by the next run. Every phase below
- * instead scans the live listing for *any* currently-existing, non-owned post/comment/reply
- * and uses whichever it finds — this self-heals as staging content changes instead of
- * needing re-captured values every run.
+ * instead scans a listing for *any* currently-existing, non-owned post/comment/reply and
+ * uses whichever it finds — this self-heals as staging content changes instead of needing
+ * re-captured values every run.
+ *
+ * Known other seeded accounts' own profiles (REPORT_TEST_OTHER_AUTHORS, default
+ * "testerprem111,koramo") are tried before the generic /latest feed: the reporter
+ * account is the one every functional/exploratory spec in this whole suite logs in as
+ * and publishes throwaway content with, which saturates /trending and /latest with its
+ * own posts — a run against the generic feed alone exhausted a 20-post scan and found
+ * zero non-owned candidates. A known other author's profile is guaranteed non-owned.
  *
  * AUTH STRATEGY: credentials come from TEST_EMAIL / TEST_PASSWORD env vars (via .env,
  * same convention as CreatePost.spec.ts, DeletePost.spec.ts, EditPost.spec.ts and
@@ -41,10 +48,20 @@ import { test, expect, type Page, type Locator } from '@playwright/test';
 const VALID_EMAIL       = process.env.TEST_EMAIL ?? 'prempoudel72707@gmail.com';
 const VALID_PASSWORD    = process.env.TEST_PASSWORD ?? 'Admin@123';
 const REPORTER_USERNAME = process.env.TEST_USERNAME ?? 'prempoudel_1';
-// Trending is dominated by this account's own posts after repeated automated runs;
-// Latest draws from the whole site and has a much larger pool of non-owned content.
-const LISTING_PATH = process.env.REPORT_TEST_LISTING_PATH ?? '/latest';
 const MAX_SCAN = 20;
+
+// This reporter account is the one every functional/exploratory spec in the whole
+// suite (CreatePost, EditPost, DeletePost, comment-lifecycle, ...) logs in as and
+// publishes throwaway content with — not just this file. That saturates /trending
+// and /latest with its own posts, so scanning the generic feed for a non-owned
+// candidate can exhaust MAX_SCAN and find nothing (confirmed: happened on /latest
+// across every phase in one run). Known other seeded accounts' own profiles are
+// guaranteed non-owned content, so try those first and fall back to the generic
+// feed only if none of them have anything.
+const OTHER_AUTHOR_USERNAMES = (process.env.REPORT_TEST_OTHER_AUTHORS ?? 'testerprem111,koramo')
+  .split(',').map((s) => s.trim()).filter(Boolean);
+const FALLBACK_LISTING_PATH = process.env.REPORT_TEST_LISTING_PATH ?? '/latest';
+const CANDIDATE_LISTINGS = [...OTHER_AUTHOR_USERNAMES.map((u) => `/profile/${u}`), FALLBACK_LISTING_PATH];
 
 async function login(page: Page): Promise<void> {
   await page.goto('https://staging.talktravel.com/login');
@@ -77,34 +94,47 @@ const REPORT_REPLY_HEADING = /^Report Reply$/i;
 const successToast = (page: Page) =>
   page.getByText(/report.*(submit|received|success)/i).or(page.getByRole('alert'));
 
+/** Tries each listing in order, returning the first successful result. */
+async function tryListings<T>(listingPaths: string[], attempt: (listingPath: string) => Promise<T>): Promise<T> {
+  const errors: string[] = [];
+  for (const listingPath of listingPaths) {
+    try {
+      return await attempt(listingPath);
+    } catch (e) {
+      errors.push(`  ${listingPath}: ${(e as Error).message}`);
+    }
+  }
+  throw new Error(`No candidate found on any listing:\n${errors.join('\n')}`);
+}
+
 /**
  * Scans a feed/topic listing for a post whose "Post options" menu offers
  * "Report Post" (own posts show Edit/Remove instead — confirmed via live DOM).
  * Leaves that menu open (Report Post visible, ready to click) and returns the
  * post's own link href for later reference (e.g. Phase 7).
  */
-async function findReportablePostOnListing(page: Page, listingPath: string): Promise<string> {
-  await page.goto(listingPath);
-  const postOptionsButtons = page.getByRole('button', { name: 'Post options' });
-  // This environment has repeatedly taken well over 15s to render a feed under
-  // real network conditions — 30s avoids failing on slow-load, not a bad selector.
-  await postOptionsButtons.first().waitFor({ state: 'visible', timeout: 30000 });
-  const count = Math.min(await postOptionsButtons.count(), MAX_SCAN);
-  for (let i = 0; i < count; i++) {
-    const button = postOptionsButtons.nth(i);
-    const href = await button
-      .locator('xpath=ancestor::a[contains(@href, "/post/")]')
-      .first()
-      .getAttribute('href')
-      .catch(() => null);
-    await button.click();
-    const reportPost = page.getByRole('button', { name: 'Report Post' });
-    if (await reportPost.isVisible({ timeout: 2000 }).catch(() => false)) {
-      return href ?? '';
+async function findReportablePostOnListing(page: Page, listingPaths: string[]): Promise<string> {
+  return tryListings(listingPaths, async (listingPath) => {
+    await page.goto(listingPath);
+    const postOptionsButtons = page.getByRole('button', { name: 'Post options' });
+    await postOptionsButtons.first().waitFor({ state: 'visible', timeout: 20000 });
+    const count = Math.min(await postOptionsButtons.count(), MAX_SCAN);
+    for (let i = 0; i < count; i++) {
+      const button = postOptionsButtons.nth(i);
+      const href = await button
+        .locator('xpath=ancestor::a[contains(@href, "/post/")]')
+        .first()
+        .getAttribute('href')
+        .catch(() => null);
+      await button.click();
+      const reportPost = page.getByRole('button', { name: 'Report Post' });
+      if (await reportPost.isVisible({ timeout: 2000 }).catch(() => false)) {
+        return href ?? '';
+      }
+      await page.keyboard.press('Escape').catch(() => {});
     }
-    await page.keyboard.press('Escape').catch(() => {});
-  }
-  throw new Error(`Could not find any reportable (non-owned) post on ${listingPath}.`);
+    throw new Error(`Could not find any reportable (non-owned) post on ${listingPath}.`);
+  });
 }
 
 /**
@@ -112,27 +142,29 @@ async function findReportablePostOnListing(page: Page, listingPath: string): Pro
  * header "Post options" menu offers "Report Post". Leaves that menu open and
  * returns the post's heading text for later assertions.
  */
-async function findReportablePostDetail(page: Page, listingPath: string): Promise<string> {
-  const titleLinks = page.locator('a.feed-post-title-link, a.feed-post-link-overlay');
-  await page.goto(listingPath);
-  await titleLinks.first().waitFor({ state: 'visible', timeout: 30000 });
-  const count = Math.min(await titleLinks.count(), MAX_SCAN);
-  for (let i = 0; i < count; i++) {
+async function findReportablePostDetail(page: Page, listingPaths: string[]): Promise<string> {
+  return tryListings(listingPaths, async (listingPath) => {
+    const titleLinks = page.locator('a.feed-post-title-link, a.feed-post-link-overlay');
     await page.goto(listingPath);
-    const links = page.locator('a.feed-post-title-link, a.feed-post-link-overlay');
-    await links.nth(i).click();
-    await page.waitForURL('**/post/**').catch(() => {});
-    const opened = await page.getByRole('button', { name: 'Post options' }).first()
-      .click({ timeout: 5000 }).then(() => true).catch(() => false);
-    if (opened) {
-      const reportPost = page.getByRole('button', { name: 'Report Post' });
-      if (await reportPost.isVisible({ timeout: 2000 }).catch(() => false)) {
-        return (await page.getByRole('heading', { level: 1 }).first().textContent())?.trim() ?? '';
+    await titleLinks.first().waitFor({ state: 'visible', timeout: 20000 });
+    const count = Math.min(await titleLinks.count(), MAX_SCAN);
+    for (let i = 0; i < count; i++) {
+      await page.goto(listingPath);
+      const links = page.locator('a.feed-post-title-link, a.feed-post-link-overlay');
+      await links.nth(i).click();
+      await page.waitForURL('**/post/**').catch(() => {});
+      const opened = await page.getByRole('button', { name: 'Post options' }).first()
+        .click({ timeout: 5000 }).then(() => true).catch(() => false);
+      if (opened) {
+        const reportPost = page.getByRole('button', { name: 'Report Post' });
+        if (await reportPost.isVisible({ timeout: 2000 }).catch(() => false)) {
+          return (await page.getByRole('heading', { level: 1 }).first().textContent())?.trim() ?? '';
+        }
+        await page.keyboard.press('Escape').catch(() => {});
       }
-      await page.keyboard.press('Escape').catch(() => {});
     }
-  }
-  throw new Error(`Could not find any reportable (non-owned) post detail page on ${listingPath}.`);
+    throw new Error(`Could not find any reportable (non-owned) post detail page on ${listingPath}.`);
+  });
 }
 
 /** Grabs the slug of any currently-listed topic from /tags. */
@@ -151,21 +183,50 @@ async function pickAnyTopicSlug(page: Page): Promise<string> {
 }
 
 /**
+ * Grabs a topic slug straight off a known other-author's own post (guaranteeing
+ * that topic's listing contains at least one non-owned post), falling back to
+ * any topic on the site if none of those profiles expose one.
+ */
+async function pickTopicSlugFromOtherAuthor(page: Page): Promise<string> {
+  for (const username of OTHER_AUTHOR_USERNAMES) {
+    await page.goto(`/profile/${username}`);
+    const topicLink = page.locator('a[href^="/tags/"]:visible').first();
+    const found = await topicLink.waitFor({ state: 'visible', timeout: 10000 })
+      .then(() => true).catch(() => false);
+    if (found) {
+      const href = await topicLink.getAttribute('href');
+      const slug = href?.split('/tags/')[1]?.split('/')[0];
+      if (slug) return slug;
+    }
+  }
+  return pickAnyTopicSlug(page);
+}
+
+/**
  * Confirmed via live DOM: top-level comments are direct children of
  * .feed-article-comments; nested replies live one level deeper inside a
  * .feed-article-comment-replies wrapper. Both use aria-label="Reply options"
- * and a "Report Reply" menu action. Scans across posts on `listingPath` (a
+ * and a "Report Reply" menu action. Scans across posts on each listing (a
  * single post may have no comments, or no nested replies) until a non-owned
  * row of the requested scope is found; returns its visible text.
  */
 async function findReportableCommentOrReply(
+  page: Page,
+  listingPaths: string[],
+  scope: 'comment' | 'reply',
+): Promise<string> {
+  return tryListings(listingPaths, (listingPath) =>
+    findReportableCommentOrReplyOn(page, listingPath, scope));
+}
+
+async function findReportableCommentOrReplyOn(
   page: Page,
   listingPath: string,
   scope: 'comment' | 'reply',
 ): Promise<string> {
   const titleLinks = page.locator('a.feed-post-title-link, a.feed-post-link-overlay');
   await page.goto(listingPath);
-  await titleLinks.first().waitFor({ state: 'visible', timeout: 30000 });
+  await titleLinks.first().waitFor({ state: 'visible', timeout: 20000 });
   const postCount = Math.min(await titleLinks.count(), MAX_SCAN);
 
   for (let p = 0; p < postCount; p++) {
@@ -216,7 +277,7 @@ test.describe('Report — Positive Flow', () => {
   });
 
   test('Phase 1: Report post from Homepage feed listing', async ({ page }) => {
-    reportedPostHref = await findReportablePostOnListing(page, LISTING_PATH);
+    reportedPostHref = await findReportablePostOnListing(page, CANDIDATE_LISTINGS);
     await page.getByRole('button', { name: 'Report Post' }).click();
 
     const dialog = page.getByRole('dialog');
@@ -239,7 +300,7 @@ test.describe('Report — Positive Flow', () => {
   });
 
   test('Phase 2: Report post from Single Post View', async ({ page }) => {
-    const title = await findReportablePostDetail(page, LISTING_PATH);
+    const title = await findReportablePostDetail(page, CANDIDATE_LISTINGS);
     await page.getByRole('button', { name: 'Report Post' }).click();
 
     const dialog = page.getByRole('dialog');
@@ -264,7 +325,7 @@ test.describe('Report — Positive Flow', () => {
   });
 
   test('Phase 3: Report a comment', async ({ page }) => {
-    const commentText = await findReportableCommentOrReply(page, LISTING_PATH, 'comment');
+    const commentText = await findReportableCommentOrReply(page, CANDIDATE_LISTINGS, 'comment');
     await page.getByRole('button', { name: 'Report Reply' }).click();
 
     const dialog = page.getByRole('dialog');
@@ -283,7 +344,7 @@ test.describe('Report — Positive Flow', () => {
   });
 
   test('Phase 4: Report a nested reply', async ({ page }) => {
-    const replyText = await findReportableCommentOrReply(page, LISTING_PATH, 'reply');
+    const replyText = await findReportableCommentOrReply(page, CANDIDATE_LISTINGS, 'reply');
     await page.getByRole('button', { name: 'Report Reply' }).click();
 
     const dialog = page.getByRole('dialog');
@@ -301,8 +362,8 @@ test.describe('Report — Positive Flow', () => {
   });
 
   test('Phase 5: Report post from Topic page', async ({ page }) => {
-    const topicSlug = await pickAnyTopicSlug(page);
-    await findReportablePostOnListing(page, `/tags/${topicSlug}/latest`);
+    const topicSlug = await pickTopicSlugFromOtherAuthor(page);
+    await findReportablePostOnListing(page, [`/tags/${topicSlug}/latest`]);
     await page.getByRole('button', { name: 'Report Post' }).click();
 
     const dialog = page.getByRole('dialog');
@@ -343,8 +404,18 @@ test.describe('Report — Positive Flow', () => {
 
     // Navigate to the new post via My Posts (direct post-detail deep links were
     // observed to be unreliable on this staging build immediately after creation).
+    // A real run showed the new post can take longer than one page load to appear
+    // here too (indexing lag) — poll with reloads instead of a single wait.
     await page.goto(`/profile/${REPORTER_USERNAME}?profile_active_tab=posts`);
-    await page.getByRole('link', { name: title }).click();
+    const ownPostLink = page.getByRole('link', { name: title });
+    let appeared = false;
+    for (let attempt = 0; attempt < 5 && !appeared; attempt++) {
+      appeared = await ownPostLink.first().waitFor({ state: 'visible', timeout: 8000 })
+        .then(() => true).catch(() => false);
+      if (!appeared) await page.reload({ waitUntil: 'domcontentloaded' });
+    }
+    if (!appeared) throw new Error(`New post "${title}" never appeared on the profile posts tab (indexing lag?).`);
+    await ownPostLink.first().click();
 
     await page.getByRole('button', { name: 'Post options' }).click();
 
