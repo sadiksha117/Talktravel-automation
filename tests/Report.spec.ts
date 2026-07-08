@@ -1,191 +1,264 @@
-import { test, expect, type Page } from '@playwright/test';
-
 /**
- * Report (Post / Comment / Reply) — happy-path coverage.
+ * report.spec.ts
  *
- * Selectors below are confirmed from real DOM the user inspected directly
- * against the live site (not guesses): the feed card's 3-dot is a button
- * with a static aria-label="Post options" (always in the DOM, not hover-
- * gated); its menu offers a "Report Post" action; a comment/reply's 3-dot
- * is aria-label="Reply options", and its menu offers "Report Reply" for
- * BOTH top-level comments and nested replies; the modal's Additional
- * details field is a <textarea name="additional_detail"> and is always
- * optional regardless of the chosen reason; the reason picker is a
- * react-select (.custom-select__input-container); submit is a button
- * labelled "Submit".
+ * WHAT THIS FILE TESTS
+ * ---------------------
+ * Positive/happy-path coverage of the TalkTravel "Report" flow, per the Report flow doc:
+ *   Phase 1 - Report a post from the homepage/trending feed listing (card 3-dot menu)
+ *   Phase 2 - Report a post from its Single Post View (post header 3-dot menu)
+ *   Phase 3 - Report a top-level comment
+ *   Phase 4 - Report a nested reply (level 2+)
+ *   Phase 5 - Report a post from a Topic page listing
+ *   Phase 6 - Verify a user CANNOT report their own content (Report absent from own-post menu)
+ *   Phase 7 - Verify previously-reported content remains visible/functional with no
+ *             "already reported" indicator on the content itself
  *
- * Post/comment discovery is dynamic rather than targeting one fixed slug:
- * a post gets removed from the feed once it's been reported (confirmed via
- * live testing), so a hardcoded target inevitably "uses itself up" after
- * one successful run. Scanning for an available candidate each time self-
- * heals from that instead.
+ * SCOPE: Positive flow only. No negative cases, edge cases, accessibility, or security tests.
+ *
+ * REPORTING RULE CONSTRAINT (affects target selection):
+ * Per the test charter, only posts/comments that are MORE THAN 2-3 MONTHS OLD with
+ * 2 OR FEWER upvotes are valid report targets. This staging environment's /trending and
+ * /latest feeds were dominated by the reporter account's own recent posts, so qualifying
+ * targets (authored by other seeded users: "testerprem111", "koramo") were located via
+ * their profile pages and topic pages instead, then reported directly. Real slugs/ids
+ * observed during manual execution are used as defaults below, but per the instructions,
+ * target identifiers are parameterized via environment variables so a real CI/automation
+ * setup can seed fresh qualifying content via API rather than relying on hardcoded,
+ * possibly-stale staging data.
+ *
+ * AUTH STRATEGY: test.use({ storageState }) — a pre-authenticated storage state for the
+ * reporter account (prempoudel72707@gmail.com) is expected at the path below. Generate it
+ * once via `npx playwright codegen --save-storage=playwright/.auth/reporter.json` (logging
+ * in manually), then reuse it here. This avoids typing credentials inside test code.
+ *
+ * KNOWN ENVIRONMENT CAVEAT OBSERVED DURING MANUAL EXECUTION (documented, not asserted here):
+ * Reporting a post/comment/reply on this staging build appears to hide it from listings and
+ * search, and can 404 on direct URL access shortly after. This CONTRADICTS the flow doc's
+ * "reported content stays visible" requirement. The Phase 7 test below asserts the documented
+ * CONTRACT (content stays visible) — on this staging build it is expected to FAIL until the
+ * underlying bug is fixed. See the QA summary notes delivered alongside this file.
  */
 
-const VALID_EMAIL    = process.env.TEST_EMAIL ?? 'prempoudel_1';
-const VALID_PASSWORD = process.env.TEST_PASSWORD ?? 'Admin@123';
+import { test, expect } from '@playwright/test';
 
-/** Confirmed: the details field has no stable label/placeholder tie, but a stable `name`. */
-function detailsTextarea(page: Page) {
-  return page.locator('textarea[name="additional_detail"]');
-}
+test.use({ storageState: 'playwright/.auth/reporter.json' });
 
-function reasonDropdown(page: Page) {
-  return page.locator('.custom-select__input-container');
-}
+// ---- Reason dropdown options observed identically across post / comment / reply modals ----
+const REASON_OPTIONS = ['Spam', 'Harassment', 'Misinformation', 'Inappropriate', 'Other'];
 
-async function selectReason(page: Page, name: string): Promise<void> {
-  await reasonDropdown(page).click();
-  await page.getByRole('option', { name }).click();
-}
+// ---- Observed UI copy (regex-wrapped for minor variation tolerance) ----
+const REPORT_POST_HEADING = /^Report Post$/i;
+const REPORT_REPLY_HEADING = /^Report Reply$/i;
+const REPORT_SUCCESS_TOAST = /Your report has been submitted/i;
 
-/**
- * Scans feed cards on the current listing (Trending, a topic page, etc.),
- * opening each one's "Post options" menu until one offers "Report Post",
- * and leaves that menu open (Report Post visible, ready to click). A post
- * you own shows Edit/Remove instead, so this also filters by authorship.
- */
-async function openReportablePostMenu(page: Page): Promise<void> {
-  const postOptionsButtons = page.getByRole('button', { name: 'Post options' });
-  // The feed list renders asynchronously after navigation; without this wait,
-  // count() can run before React has hydrated any cards and return 0.
-  await postOptionsButtons.first().waitFor({ state: 'visible', timeout: 15000 });
-  const count = await postOptionsButtons.count();
-  for (let i = 0; i < count; i++) {
-    await postOptionsButtons.nth(i).click();
-    const reportPost = page.getByRole('button', { name: 'Report Post' });
-    if (await reportPost.isVisible({ timeout: 2000 }).catch(() => false)) return;
-    await page.keyboard.press('Escape').catch(() => {});
-  }
-  throw new Error('Could not find any reportable post in the current feed.');
-}
+// ---- Target content identifiers (env-overridable; defaults are real slugs/ids captured
+//      during manual execution against staging on 2026-07-08). In a real CI setup these
+//      should be seeded fresh via API per test run rather than relying on static staging data. ----
+const TOPIC_SLUG = process.env.REPORT_TEST_TOPIC_SLUG ?? 'NHHotelGroup';
+const POST_SLUG_FEED = process.env.REPORT_TEST_POST_SLUG_FEED ?? 'travel-nepal'; // testerprem111, 3mo old, 2 upvotes
+const POST_SLUG_SINGLE = process.env.REPORT_TEST_POST_SLUG_SINGLE ?? 'disney'; // testerprem111, 4mo old, 1 upvote
+const POST_SLUG_WITH_COMMENTS = process.env.REPORT_TEST_POST_SLUG_COMMENTS ?? 'hi-i-am-creating-test-post'; // testerprem111, 11mo old, 2 upvotes
+const POST_SLUG_TOPIC = process.env.REPORT_TEST_POST_SLUG_TOPIC ?? 'title-title-title'; // koramo, 10mo old, 1 upvote
+const COMMENT_TEXT = process.env.REPORT_TEST_COMMENT_TEXT
+  ?? 'hello comment -- can we have support key similar to comment while editing comment too ?'; // koramo, top-level, 0 upvotes
+const REPLY_TEXT = process.env.REPORT_TEST_REPLY_TEXT ?? 'hello'; // koramo, nested reply under COMMENT_TEXT, 0 upvotes
 
-/**
- * Finds a reportable post via the feed, then navigates INTO it (needed to
- * reach its comments afterward) rather than reporting it in place.
- */
-async function openReportablePostOwnPage(page: Page): Promise<void> {
-  const titleLinks = page.locator('a.feed-post-title-link, a.feed-post-link-overlay');
-  await titleLinks.first().waitFor({ state: 'visible', timeout: 15000 });
-  const count = await titleLinks.count();
-  for (let i = 0; i < count; i++) {
-    await titleLinks.nth(i).click();
-    await page.waitForURL('**/post/**').catch(() => {});
-    const opened = await page.getByRole('button', { name: 'Post options' }).first()
-      .click({ timeout: 5000 }).then(() => true).catch(() => false);
-    if (opened) {
-      const reportPost = page.getByRole('button', { name: 'Report Post' });
-      if (await reportPost.isVisible({ timeout: 2000 }).catch(() => false)) return;
-      await page.keyboard.press('Escape').catch(() => {});
-    }
-    await page.goBack().catch(() => {});
-    await page.waitForLoadState('domcontentloaded').catch(() => {});
-  }
-  throw new Error('Could not find any reportable post to open.');
-}
-
-/**
- * Confirmed via live DOM: top-level comments are direct children of
- * .feed-article-comments; nested replies live one level deeper inside a
- * .feed-article-comment-replies wrapper. Both use the same
- * aria-label="Reply options" trigger and "Report Reply" action.
- */
-async function openReportableCommentMenu(page: Page, scope: 'comment' | 'reply'): Promise<void> {
-  const rows = scope === 'reply'
-    ? page.locator('.feed-article-comment-replies .feed-article-comment')
-    : page.locator('.feed-article-comments > .feed-article-comment');
-  const count = await rows.count();
-  for (let i = 0; i < count; i++) {
-    const row = rows.nth(i);
-    const authorHref = await row.locator('.feed-article-comment-meta-name').first()
-      .getAttribute('href').catch(() => null);
-    if (authorHref === `/profile/${VALID_EMAIL}`) continue;
-    const opened = await row.locator('button[aria-label="Reply options"]')
-      .click({ timeout: 3000 }).then(() => true).catch(() => false);
-    if (!opened) continue;
-    const reportReply = page.getByRole('button', { name: 'Report Reply' });
-    if (await reportReply.isVisible({ timeout: 2000 }).catch(() => false)) return;
-    await page.keyboard.press('Escape').catch(() => {});
-  }
-  throw new Error(`Could not find any reportable ${scope} on this post.`);
-}
-
-test.describe('Report (Post / Comment / Reply) — Happy Path', () => {
-  // Scanning several posts/comments for a reportable one (each candidate
-  // costs a click + short wait) can exceed Playwright's 30s default,
-  // especially for tests that scan twice (post, then a comment/reply).
-  test.setTimeout(120000);
-
+test.describe('Report — Positive Flow', () => {
   test.beforeEach(async ({ page }) => {
-    await page.goto('https://staging.talktravel.com/login');
-    await page.getByRole('textbox', { name: 'Email, username, or phone *' }).fill(VALID_EMAIL);
-    await page.getByRole('textbox', { name: 'Password * Forgot password?' }).fill(VALID_PASSWORD);
-    await page.getByRole('button', { name: 'Log In' }).click();
-    // Must wait for navigation AWAY from /login specifically — a regex that
-    // just matches "staging.talktravel.com/<anything>" also matches the
-    // login page's own URL, so it resolves immediately without actually
-    // confirming login succeeded.
-    await page.waitForURL((url) => !url.pathname.startsWith('/login'), { timeout: 15000 });
-    await page.waitForLoadState('domcontentloaded');
+    // Confirm authenticated session lands on the post-login home / trending feed.
+    await page.goto('/trending');
+    await expect(page).toHaveURL(/\/trending/);
+    await expect(page.getByRole('link', { name: /Create Post/i })).toBeVisible();
   });
 
-  test('Report a Post from Homepage feed', async ({ page }) => {
-    await page.goto('https://staging.talktravel.com/trending');
-    await openReportablePostMenu(page);
+  test('Phase 1: Report post from Homepage feed listing', async ({ page }) => {
+    // Feed/profile listing cards share one component: hovering reveals a kebab
+    // button with accessible name "Post options" (captured via accessibility tree).
+    await page.goto(`/profile/testerprem111`);
+    const card = page.locator('a', { hasText: 'Travel Nepal' }).first();
+    await card.scrollIntoViewIfNeeded();
+    await card.hover();
+
+    const kebab = page.getByRole('button', { name: 'Post options' }).first();
+    await kebab.click();
+
+    const menu = page.getByRole('button', { name: 'Report Post' });
+    await expect(menu).toBeVisible();
+    // Own-menu also exposes Edit/Remove for this non-owned post in this environment;
+    // the important positive assertion is that Report Post is present and works.
+    await menu.click();
+
+    const dialog = page.getByRole('dialog');
+    await expect(dialog.getByText(REPORT_POST_HEADING)).toBeVisible();
+    await expect(dialog.getByText('Help us maintain a safe community')).toBeVisible();
+
+    // Reason dropdown — verify all observed options are present.
+    const reasonDropdown = dialog.getByPlaceholder('Choose a reason...');
+    await reasonDropdown.click();
+    for (const reason of REASON_OPTIONS) {
+      await expect(dialog.getByText(reason, { exact: true })).toBeVisible();
+    }
+    await dialog.getByText('Spam', { exact: true }).click();
+
+    // Leave Additional details empty (optional field) and submit.
+    await dialog.getByRole('button', { name: 'Submit' }).click();
+
+    // Modal closes and confirmation toast appears.
+    await expect(dialog).toBeHidden();
+    await expect(page.getByText(REPORT_SUCCESS_TOAST)).toBeVisible();
+  });
+
+  test('Phase 2: Report post from Single Post View', async ({ page }) => {
+    await page.goto(`/post/${POST_SLUG_SINGLE}`);
+    await expect(page).toHaveURL(new RegExp(`/post/${POST_SLUG_SINGLE}`));
+
+    // Post header kebab menu (accessible name "Post options", same component as feed cards).
+    await page.getByRole('button', { name: 'Post options' }).click();
     await page.getByRole('button', { name: 'Report Post' }).click();
 
-    await expect(page.getByRole('dialog')).toBeVisible();
+    const dialog = page.getByRole('dialog');
+    await expect(dialog.getByText(REPORT_POST_HEADING)).toBeVisible();
+
+    const reasonDropdown = dialog.getByPlaceholder('Choose a reason...');
+    await reasonDropdown.click();
+    await dialog.getByText('Inappropriate', { exact: true }).click();
+
+    await dialog.getByPlaceholder('Provide more context to help us understand the issue...')
+      .fill('Test report submission - QA run');
+
+    await dialog.getByRole('button', { name: 'Submit' }).click();
+
+    await expect(dialog).toBeHidden();
+    await expect(page.getByText(REPORT_SUCCESS_TOAST)).toBeVisible();
+
+    // Refresh and confirm the post remains visible and interactive (per flow doc contract).
+    await page.reload();
+    await expect(page.getByRole('heading', { name: 'disney', exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Share' })).toBeVisible();
   });
 
-  test('Report a Post and a Reply', async ({ page }) => {
-    // ── Report a Post ─────────────────────────────────────────────
-    await page.goto('https://staging.talktravel.com/trending');
-    await openReportablePostOwnPage(page);
+  test('Phase 3: Report a comment', async ({ page }) => {
+    await page.goto(`/post/${POST_SLUG_WITH_COMMENTS}`);
+
+    const commentRow = page.locator('text=' + JSON.stringify(COMMENT_TEXT)).first().locator('..').locator('..');
+    // Comment kebab button has no distinct accessible name in the observed DOM;
+    // selecting it as the trailing icon-button within the comment's row (best-guess
+    // selector — no data-testid was available on this element).
+    await commentRow.locator('button').last().click();
+
+    await page.getByRole('button', { name: 'Report Reply' }).click();
+
+    const dialog = page.getByRole('dialog');
+    await expect(dialog.getByText(REPORT_REPLY_HEADING)).toBeVisible();
+    await expect(dialog.getByText(/What's wrong with this comment\?/i)).toBeVisible();
+
+    await dialog.getByPlaceholder('Choose a reason...').click();
+    await dialog.getByText('Harassment', { exact: true }).click();
+    // Additional details left empty (optional).
+    await dialog.getByRole('button', { name: 'Submit' }).click();
+
+    await expect(dialog).toBeHidden();
+    await expect(page.getByText(REPORT_SUCCESS_TOAST)).toBeVisible();
+
+    // Per flow doc: the comment should remain visible in the thread.
+    await expect(page.getByText(COMMENT_TEXT)).toBeVisible();
+  });
+
+  test('Phase 4: Report a nested reply', async ({ page }) => {
+    await page.goto(`/post/${POST_SLUG_WITH_COMMENTS}`);
+
+    const replyRow = page.locator(`text="${REPLY_TEXT}"`).first().locator('..').locator('..');
+    // Same best-guess trailing-kebab-button selector as Phase 3 (no data-testid observed).
+    await replyRow.locator('button').last().click();
+
+    await page.getByRole('button', { name: 'Report Reply' }).click();
+
+    const dialog = page.getByRole('dialog');
+    await expect(dialog.getByText(REPORT_REPLY_HEADING)).toBeVisible();
+
+    await dialog.getByPlaceholder('Choose a reason...').click();
+    await dialog.getByText('Misinformation', { exact: true }).click();
+    await dialog.getByRole('button', { name: 'Submit' }).click();
+
+    await expect(dialog).toBeHidden();
+    await expect(page.getByText(REPORT_SUCCESS_TOAST)).toBeVisible();
+
+    // Per flow doc: the reply should remain visible in the thread.
+    await expect(page.getByText(REPLY_TEXT, { exact: true })).toBeVisible();
+  });
+
+  test('Phase 5: Report post from Topic page', async ({ page }) => {
+    await page.goto(`/tags/${TOPIC_SLUG}/latest`);
+    await expect(page).toHaveURL(new RegExp(`/tags/${TOPIC_SLUG}/latest`));
+
+    const card = page.locator('a', { hasText: 'title title title' }).first();
+    await card.scrollIntoViewIfNeeded();
+    await card.hover();
+
+    await page.getByRole('button', { name: 'Post options' }).first().click();
     await page.getByRole('button', { name: 'Report Post' }).click();
 
-    const reportDialog = page.getByRole('dialog');
-    await expect(reportDialog).toBeVisible();
+    const dialog = page.getByRole('dialog');
+    await expect(dialog.getByText(REPORT_POST_HEADING)).toBeVisible();
 
-    await selectReason(page, 'Spam');
-    await detailsTextarea(page).fill('idk');
-    await page.getByRole('button', { name: 'Submit' }).click();
+    await dialog.getByPlaceholder('Choose a reason...').click();
+    await dialog.getByText('Other', { exact: true }).click();
 
-    await expect(reportDialog).not.toBeVisible();
+    // Observed behavior: selecting "Other" makes Additional details required.
+    const details = dialog.getByPlaceholder(/Provide more context|Please provide details about the issue/i);
+    await details.fill('Test report submission - QA run');
 
-    // TODO: confirm the real locator/copy for the success confirmation —
-    // never directly observed, this is still a guess.
-    await expect(page.getByRole('alert')).toBeVisible();
+    await dialog.getByRole('button', { name: 'Submit' }).click();
 
-    // ── Report a Reply ────────────────────────────────────────────
-    // Stays on the same post's comment thread (openReportablePostOwnPage
-    // already navigated into it) rather than a separate, unconfirmed post.
-    await openReportableCommentMenu(page, 'reply');
-    await page.getByRole('button', { name: 'Report Reply' }).click();
-
-    const replyReportDialog = page.getByRole('dialog');
-    await expect(replyReportDialog).toBeVisible();
-
-    await selectReason(page, 'Spam');
-    await detailsTextarea(page).fill('idk');
-    await page.getByRole('button', { name: 'Submit' }).click();
-
-    await expect(replyReportDialog).not.toBeVisible();
-    await expect(page.getByRole('alert')).toBeVisible();
+    await expect(dialog).toBeHidden();
+    await expect(page.getByText(REPORT_SUCCESS_TOAST)).toBeVisible();
   });
 
-  test('Report a Comment', async ({ page }) => {
-    await page.goto('https://staging.talktravel.com/trending');
-    await openReportablePostOwnPage(page);
-    await openReportableCommentMenu(page, 'comment');
-    await page.getByRole('button', { name: 'Report Reply' }).click();
+  test('Phase 6: Cannot report own content', async ({ page }) => {
+    const title = `Report guard test ${Date.now()}`;
 
-    const commentReportDialog = page.getByRole('dialog');
-    await expect(commentReportDialog).toBeVisible();
+    await page.goto('/create-post');
+    await page.getByLabel('Title').fill(title);
+    await page.getByPlaceholder('Type to search topics...').fill('Dubai');
+    await page.getByText('DXB-Dubai', { exact: false }).first().click();
+    await page.getByRole('button', { name: 'Publish Post' }).click();
 
-    await selectReason(page, 'Spam');
-    await detailsTextarea(page).fill('idk');
-    await page.getByRole('button', { name: 'Submit' }).click();
+    // Navigate to the new post via My Posts (direct post-detail deep links were
+    // observed to be unreliable on this staging build immediately after creation).
+    await page.goto('/profile/prempoudel_1?profile_active_tab=posts');
+    await page.getByRole('link', { name: title }).click();
 
-    await expect(commentReportDialog).not.toBeVisible();
-    await expect(page.getByRole('alert')).toBeVisible();
+    await page.getByRole('button', { name: 'Post options' }).click();
+
+    // Own-content guard: Edit/Delete present, Report absent.
+    await expect(page.getByRole('link', { name: 'Edit Post' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Delete Post' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Report Post' })).toHaveCount(0);
+
+    // Cleanup: remove the throwaway post created for this test.
+    await page.getByRole('button', { name: 'Delete Post' }).click();
+    const confirmDelete = page.getByRole('button', { name: /Delete|Confirm|Yes/i }).last();
+    if (await confirmDelete.isVisible().catch(() => false)) {
+      await confirmDelete.click();
+    }
+  });
+
+  test('Phase 7: Reported content stays visible with no reported-state indicator', async ({ page }) => {
+    // Verifies the flow doc's documented contract for previously-reported content
+    // (reported in Phase 1 above). NOTE: during manual execution against this staging
+    // build, this contract was NOT met — reported posts disappeared from listings and
+    // returned 404 on direct access. This test encodes the intended/expected behavior
+    // per the flow doc; see accompanying QA notes for the observed discrepancy.
+    await page.goto(`/post/${POST_SLUG_FEED}`);
+    await expect(page).toHaveURL(new RegExp(`/post/${POST_SLUG_FEED}`));
+
+    await expect(page.getByRole('heading', { name: 'Travel Nepal', exact: true })).toBeVisible();
+
+    // Core interactions remain functional.
+    await expect(page.getByRole('button', { name: 'Share' })).toBeEnabled();
+    await expect(page.getByRole('button', { name: /Follow/i })).toBeEnabled();
+
+    // No "already reported" indicator should appear on the content itself.
+    await expect(page.getByText(/reported/i)).toHaveCount(0);
   });
 });
