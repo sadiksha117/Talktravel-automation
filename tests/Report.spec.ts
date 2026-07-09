@@ -60,8 +60,13 @@ const MAX_SCAN = 20;
 // feed only if none of them have anything.
 const OTHER_AUTHOR_USERNAMES = (process.env.REPORT_TEST_OTHER_AUTHORS ?? 'testerprem111,koramo')
   .split(',').map((s) => s.trim()).filter(Boolean);
-const FALLBACK_LISTING_PATH = process.env.REPORT_TEST_LISTING_PATH ?? '/latest';
-const CANDIDATE_LISTINGS = [...OTHER_AUTHOR_USERNAMES.map((u) => `/profile/${u}`), FALLBACK_LISTING_PATH];
+// A real run found zero non-reporter comments/replies across testerprem111's profile,
+// koramo's profile, AND /latest combined (20 posts scanned each) — the pool of other-
+// authored content with actual engagement is thin, so cast as wide a net as possible
+// rather than giving up after a couple of sources.
+const FALLBACK_LISTING_PATHS = (process.env.REPORT_TEST_LISTING_PATHS ?? '/latest,/trending,/for-you')
+  .split(',').map((s) => s.trim()).filter(Boolean);
+const CANDIDATE_LISTINGS = [...OTHER_AUTHOR_USERNAMES.map((u) => `/profile/${u}`), ...FALLBACK_LISTING_PATHS];
 
 async function login(page: Page): Promise<void> {
   await page.goto('https://staging.talktravel.com/login');
@@ -167,39 +172,57 @@ async function findReportablePostDetail(page: Page, listingPaths: string[]): Pro
   });
 }
 
-/** Grabs the slug of any currently-listed topic from /tags. */
-async function pickAnyTopicSlug(page: Page): Promise<string> {
+/** Grabs up to `limit` distinct topic slugs currently listed on /tags. */
+async function pickTopicSlugsFromSite(page: Page, limit = 5): Promise<string[]> {
   await page.goto('/tags');
   // The header's own nav dropdown also renders <a href="/tags/...."> links,
   // just hidden (class="nav-dropdown-link") until that dropdown is opened — a
   // real failure trace showed a bare a[href^="/tags/"] locator matching one of
   // those instead of a visible topic on the page. :visible filters them out.
-  const topicLink = page.locator('a[href^="/tags/"]:visible').first();
-  await topicLink.waitFor({ state: 'visible', timeout: 30000 });
-  const href = await topicLink.getAttribute('href');
-  const slug = href?.split('/tags/')[1]?.split('/')[0];
-  if (!slug) throw new Error('Could not find any topic slug on /tags.');
-  return slug;
+  const topicLinks = page.locator('a[href^="/tags/"]:visible');
+  await topicLinks.first().waitFor({ state: 'visible', timeout: 30000 });
+  const count = Math.min(await topicLinks.count(), limit);
+  const slugs: string[] = [];
+  for (let i = 0; i < count; i++) {
+    const href = await topicLinks.nth(i).getAttribute('href');
+    const slug = href?.split('/tags/')[1]?.split('/')[0];
+    if (slug) slugs.push(slug);
+  }
+  if (!slugs.length) throw new Error('Could not find any topic slug on /tags.');
+  return slugs;
 }
 
 /**
- * Grabs a topic slug straight off a known other-author's own post (guaranteeing
- * that topic's listing contains at least one non-owned post), falling back to
- * any topic on the site if none of those profiles expose one.
+ * Grabs topic slugs straight off known other-authors' own posts (guaranteeing
+ * those topics' listings contain at least one non-owned post), then tops up
+ * with whatever else is on /tags — a single topic can turn out to be nearly
+ * empty (confirmed: one run's chosen topic timed out with zero posts), so
+ * callers should try several rather than committing to just one.
  */
-async function pickTopicSlugFromOtherAuthor(page: Page): Promise<string> {
+async function pickTopicSlugsFromOtherAuthors(page: Page): Promise<string[]> {
+  const slugs: string[] = [];
   for (const username of OTHER_AUTHOR_USERNAMES) {
     await page.goto(`/profile/${username}`);
-    const topicLink = page.locator('a[href^="/tags/"]:visible').first();
-    const found = await topicLink.waitFor({ state: 'visible', timeout: 10000 })
+    const topicLinks = page.locator('a[href^="/tags/"]:visible');
+    const found = await topicLinks.first().waitFor({ state: 'visible', timeout: 10000 })
       .then(() => true).catch(() => false);
-    if (found) {
-      const href = await topicLink.getAttribute('href');
+    if (!found) continue;
+    const count = Math.min(await topicLinks.count(), 3);
+    for (let i = 0; i < count; i++) {
+      const href = await topicLinks.nth(i).getAttribute('href');
       const slug = href?.split('/tags/')[1]?.split('/')[0];
-      if (slug) return slug;
+      if (slug && !slugs.includes(slug)) slugs.push(slug);
     }
   }
-  return pickAnyTopicSlug(page);
+  try {
+    for (const slug of await pickTopicSlugsFromSite(page)) {
+      if (!slugs.includes(slug)) slugs.push(slug);
+    }
+  } catch {
+    // Fine if /tags itself has nothing extra to add — other-author slugs may suffice.
+  }
+  if (!slugs.length) throw new Error('Could not find any topic slug on other-author profiles or /tags.');
+  return slugs;
 }
 
 /**
@@ -362,8 +385,10 @@ test.describe('Report — Positive Flow', () => {
   });
 
   test('Phase 5: Report post from Topic page', async ({ page }) => {
-    const topicSlug = await pickTopicSlugFromOtherAuthor(page);
-    await findReportablePostOnListing(page, [`/tags/${topicSlug}/latest`]);
+    // A single topic can turn out to be nearly empty (confirmed: one run's chosen
+    // topic timed out with zero posts) — try several before giving up.
+    const topicSlugs = await pickTopicSlugsFromOtherAuthors(page);
+    await findReportablePostOnListing(page, topicSlugs.map((slug) => `/tags/${slug}/latest`));
     await page.getByRole('button', { name: 'Report Post' }).click();
 
     const dialog = page.getByRole('dialog');
@@ -402,20 +427,24 @@ test.describe('Report — Positive Flow', () => {
     // with a forced click (see CreatePost.exploratory.spec.ts) — same fix here.
     await page.getByRole('button', { name: 'Publish Post' }).click({ force: true });
 
-    // Navigate to the new post via My Posts (direct post-detail deep links were
-    // observed to be unreliable on this staging build immediately after creation).
-    // A real run showed the new post can take longer than one page load to appear
-    // here too (indexing lag) — poll with reloads instead of a single wait.
-    await page.goto(`/profile/${REPORTER_USERNAME}?profile_active_tab=posts`);
-    const ownPostLink = page.getByRole('link', { name: title });
-    let appeared = false;
-    for (let attempt = 0; attempt < 5 && !appeared; attempt++) {
-      appeared = await ownPostLink.first().waitFor({ state: 'visible', timeout: 8000 })
-        .then(() => true).catch(() => false);
-      if (!appeared) await page.reload({ waitUntil: 'domcontentloaded' });
+    // Most create-post flows redirect straight to the new post — try that first,
+    // it's a single wait rather than a hunt. A previous run found the post never
+    // appeared on the profile "posts" tab across 5 reload retries (~40s), which
+    // reads more like the tab/query param being wrong than pure indexing lag, so
+    // that hunt is now only a fallback, not the primary path.
+    const redirected = await page.waitForURL('**/post/**', { timeout: 15000 }).then(() => true).catch(() => false);
+    if (!redirected) {
+      await page.goto(`/profile/${REPORTER_USERNAME}?profile_active_tab=posts`);
+      const ownPostLink = page.getByRole('link', { name: title });
+      let appeared = false;
+      for (let attempt = 0; attempt < 5 && !appeared; attempt++) {
+        appeared = await ownPostLink.first().waitFor({ state: 'visible', timeout: 8000 })
+          .then(() => true).catch(() => false);
+        if (!appeared) await page.reload({ waitUntil: 'domcontentloaded' });
+      }
+      if (!appeared) throw new Error(`New post "${title}" never appeared on the profile posts tab, and publishing did not redirect to it either.`);
+      await ownPostLink.first().click();
     }
-    if (!appeared) throw new Error(`New post "${title}" never appeared on the profile posts tab (indexing lag?).`);
-    await ownPostLink.first().click();
 
     await page.getByRole('button', { name: 'Post options' }).click();
 
