@@ -51,6 +51,16 @@ async function login(page: Page) {
   await page.locator('#login-password').fill(PASSWORD);
   await page.getByRole('button', { name: 'Log In', exact: true }).click();
   await expect(page).toHaveURL(`${BASE_URL}/trending`);
+
+  // The cookie-consent overlay sits on top of the page on a fresh session and
+  // silently swallows clicks on anything underneath it (confirmed live: every
+  // phase that clicked the "Followed Posts" nav link timed out, while phases
+  // that used page.goto() directly did not). Dismiss it once here so it's
+  // gone before any test tries to click through the left nav.
+  const acceptCookiesBtn = page.getByRole('button', { name: 'Accept All' });
+  if (await acceptCookiesBtn.isVisible({ timeout: 3000 }).catch(() => false)) {
+    await acceptCookiesBtn.click();
+  }
 }
 
 async function goToFollowedPosts(page: Page) {
@@ -215,17 +225,45 @@ test.describe('Followed Posts — Positive Flow', () => {
     await expect(page.locator(`a[href="${POSTS.thirdPost.slug}"]`)).toHaveCount(0);
   });
 
-  test('Phase 9 & 10: Unfollowed post still exists directly and can be re-followed from Single Post View', async ({ page }) => {
-    await page.goto(`${BASE_URL}${POSTS.thirdPost.slug}`);
+  test('Phase 9 & 10: Pick any post from the feed, follow it from its full Single Post View, then find it back on Followed Posts', async ({ page }) => {
+    await page.goto(`${BASE_URL}/latest`);
 
-    await expect(page.getByRole('heading', { name: POSTS.thirdPost.title, level: 1 })).toBeVisible();
+    // Dynamic target instead of a pinned slug — a fixed post can 404 or
+    // already be followed by the time this runs (same lesson learned in
+    // Report.spec.ts). Scan for any card currently showing "Follow".
+    const cards = page.locator('.feed-post-item');
+    await expect(cards.first()).toBeVisible();
+    const count = await cards.count();
+    let title: string | null = null;
+    for (let i = 0; i < count; i++) {
+      const card = cards.nth(i);
+      await card.hover();
+      if (await card.getByRole('button', { name: 'Follow this post' }).isVisible().catch(() => false)) {
+        title = await card.locator('.feed-post-title-link').first().textContent();
+        await card.locator('.feed-post-title-link').first().click();
+        break;
+      }
+    }
+    if (!title) {
+      throw new Error('No unfollowed post found on Latest to use as a target');
+    }
+
+    // Now on the full Single Post View (not just following in-place on the card).
+    await expect(page.getByRole('heading', { name: title.trim(), level: 1 })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Follow this post' })).toBeVisible();
 
     await page.getByRole('button', { name: 'Follow this post' }).click();
     await expect(page.getByRole('button', { name: 'Unfollow this post' })).toBeVisible();
+    const followedHref = page.url().replace(BASE_URL, '');
 
+    // Check it's now on Followed Posts' Latest tab.
     await page.goto(`${BASE_URL}/my/followed-posts/latest`);
-    await expect(page.locator(`a[href="${POSTS.thirdPost.slug}"]`)).toHaveCount(1);
+    await expect(page.locator(`a[href="${followedHref}"]`).first()).toBeVisible();
+
+    // Cleanup: unfollow so the shared account's follow state doesn't drift.
+    await page.goto(`${BASE_URL}${followedHref}`);
+    await page.getByRole('button', { name: 'Unfollow this post' }).click();
+    await expect(page.getByRole('button', { name: 'Follow this post' })).toBeVisible();
   });
 
   test('Phase 11: 3-dot menu on own post shows Edit/Delete and never Report', async ({ page }) => {
@@ -278,6 +316,10 @@ test.describe('Followed Posts — Positive Flow', () => {
     let href: string | null = null;
     for (let i = 0; i < count; i++) {
       const card = cards.nth(i);
+      // The Follow/Unfollow toggle and "Post options" only render on hover
+      // (same as Phase 11/12) — without this, isVisible() is false for
+      // every card regardless of follow state, and the scan finds nothing.
+      await card.hover();
       const followBtn = card.getByRole('button', { name: 'Follow this post' });
       if (await followBtn.isVisible().catch(() => false)) {
         target = card;
@@ -291,6 +333,7 @@ test.describe('Followed Posts — Positive Flow', () => {
 
     // Follow it in place — this must NOT navigate away from the feed, unlike
     // clicking the card itself (which opens the Single Post View).
+    await target.hover();
     await target.getByRole('button', { name: 'Follow this post' }).click();
     await expect(target.getByRole('button', { name: 'Unfollow this post' })).toBeVisible();
     await expect(page).toHaveURL(`${BASE_URL}/latest`);
