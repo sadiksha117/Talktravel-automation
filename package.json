@@ -8,7 +8,9 @@
     "test:firefox": "playwright test --project=firefox",
     "test:webkit": "playwright test --project=webkit",
     "test:headed": "playwright test --headed",
-    "report": "playwright show-report"
+    "report": "playwright show-report",
+    "codegen:login": "playwright codegen --save-storage=playwright/.auth/state.json https://staging.talktravel.com/login",
+    "codegen": "playwright codegen --load-storage=playwright/.auth/state.json https://staging.talktravel.com/trending"
   },
   "devDependencies": {
     "@playwright/test": "^1.44.0",
