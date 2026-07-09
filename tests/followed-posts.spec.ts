@@ -26,7 +26,7 @@
 //      this test account holds Moderator/Admin privileges.
 // ============================================================================
 
-import { test, expect, Page } from '@playwright/test';
+import { test, expect, Page, Locator } from '@playwright/test';
 
 const BASE_URL = 'https://staging.talktravel.com';
 const EMAIL = process.env.TEST_EMAIL ?? 'prempoudel72707@gmail.com';
@@ -263,6 +263,46 @@ test.describe('Followed Posts — Positive Flow', () => {
     // Close menu without action
     await page.keyboard.press('Escape');
     await expect(page.getByText('Report Post', { exact: true })).not.toBeVisible();
+  });
+
+  test('Phase 13: Follow a post directly from a feed card on Latest, without opening it, then see it in Followed Posts', async ({ page }) => {
+    await page.goto(`${BASE_URL}/latest`);
+
+    // Scan for a card not already followed — the shared account accumulates
+    // follows across runs, so a fixed target would flake once it's followed.
+    // Same self-healing scan pattern as Report.spec.ts.
+    const cards = page.locator('.feed-post-item');
+    await expect(cards.first()).toBeVisible();
+    const count = await cards.count();
+    let target: Locator | null = null;
+    let href: string | null = null;
+    for (let i = 0; i < count; i++) {
+      const card = cards.nth(i);
+      const followBtn = card.getByRole('button', { name: 'Follow this post' });
+      if (await followBtn.isVisible().catch(() => false)) {
+        target = card;
+        href = await card.locator('.feed-post-title-link').first().getAttribute('href');
+        break;
+      }
+    }
+    if (!target || !href) {
+      throw new Error('No unfollowed post found on Latest to use as a target');
+    }
+
+    // Follow it in place — this must NOT navigate away from the feed, unlike
+    // clicking the card itself (which opens the Single Post View).
+    await target.getByRole('button', { name: 'Follow this post' }).click();
+    await expect(target.getByRole('button', { name: 'Unfollow this post' })).toBeVisible();
+    await expect(page).toHaveURL(`${BASE_URL}/latest`);
+
+    // It should now show up in Followed Posts.
+    await page.goto(`${BASE_URL}/my/followed-posts/latest`);
+    await expect(page.locator(`a[href="${href}"]`).first()).toBeVisible();
+
+    // Cleanup: unfollow it again so the shared account's follow state doesn't drift.
+    await page.goto(`${BASE_URL}${href}`);
+    await page.getByRole('button', { name: 'Unfollow this post' }).click();
+    await expect(page.getByRole('button', { name: 'Follow this post' })).toBeVisible();
   });
 
   test('Cleanup: unfollow posts followed during setup', async ({ page }) => {
