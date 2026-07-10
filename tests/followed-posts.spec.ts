@@ -73,49 +73,68 @@ async function goToFollowedPosts(page: Page) {
 }
 
 /**
- * Follows the first not-yet-followed post found on /latest, in place on its
- * feed card, and returns its real title/author/topic as captured live.
- * Hardcoded slugs on this staging environment go stale fast — confirmed
- * live: every POSTS.* constant this file originally pinned had either been
- * unfollowed by other test runs or dropped off /latest by the next run,
- * within about a day of being captured. requireTopic skips candidates with
- * no topic chip, for tests that need one to click.
+ * Pure discovery — finds (without following) the first not-yet-followed post
+ * on /latest and returns its real title/author/topic as captured live, plus
+ * an href-anchored Locator for the caller to act on. Hardcoded slugs on this
+ * staging environment go stale fast (confirmed live: every POSTS.* constant
+ * this file originally pinned had drifted within about a day), so nothing
+ * pins a specific post anymore.
+ *
+ * Deliberately re-locates by href rather than handing back the index-based
+ * `cards.nth(i)` locator used during the scan — /latest sorts by recency, so
+ * a new post landing mid-scan can shift what's at a given index between the
+ * visibility check and whatever the caller does next (confirmed live: a
+ * click landed on a different card than the one just inspected).
+ *
+ * If nothing unfollowed is visible in the initially-rendered cards, scrolls
+ * once to trigger lazy-loading before giving up — this account accumulates
+ * follows across many runs, and /latest doesn't render everything up front.
+ *
+ * requireTopic skips candidates with no topic chip, for tests that need one
+ * to click.
  */
-async function followFreshPostFromLatest(page: Page, opts: { requireTopic?: boolean } = {}): Promise<DiscoveredPost> {
+async function findUnfollowedPostOnLatest(
+  page: Page,
+  opts: { requireTopic?: boolean } = {}
+): Promise<DiscoveredPost & { card: Locator }> {
   await page.goto(`${BASE_URL}/latest`);
-  const cards = page.locator('.feed-post-item');
-  await expect(cards.first()).toBeVisible();
-  const count = await cards.count();
 
-  for (let i = 0; i < count; i++) {
-    const card = cards.nth(i);
-    await card.hover();
-    const followBtn = card.getByRole('button', { name: 'Follow this post' });
-    if (!(await followBtn.isVisible().catch(() => false))) continue;
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const cards = page.locator('.feed-post-item');
+    await expect(cards.first()).toBeVisible();
+    const count = await cards.count();
 
-    const titleLink = card.locator('.feed-post-title-link').first();
-    const href = await titleLink.getAttribute('href');
-    if (!href) continue;
+    for (let i = 0; i < count; i++) {
+      const card = cards.nth(i);
+      await card.hover();
+      const followBtn = card.getByRole('button', { name: 'Follow this post' });
+      if (!(await followBtn.isVisible().catch(() => false))) continue;
 
-    // Extracted via the universal a[href^="/profile/"] pattern rather than
-    // the .feed-post-meta-user class, since it's ambiguous whether that
-    // class is on the anchor itself or a wrapper around it.
-    const authorLink = card.locator('a[href^="/profile/"]').first();
-    const authorHref = await authorLink.getAttribute('href');
-    const author = authorHref?.replace('/profile/', '') ?? '';
+      const titleLink = card.locator('.feed-post-title-link').first();
+      const href = await titleLink.getAttribute('href');
+      if (!href) continue;
 
-    const topicEl = card.locator('.tag-default').first();
-    const hasTopic = await topicEl.isVisible().catch(() => false);
-    if (opts.requireTopic && !hasTopic) continue;
-    const topicHref = hasTopic ? await topicEl.getAttribute('href') : null;
-    const topicText = hasTopic ? (await topicEl.textContent())?.trim() ?? null : null;
+      // Extracted via the universal a[href^="/profile/"] pattern rather than
+      // the .feed-post-meta-user class, since it's ambiguous whether that
+      // class is on the anchor itself or a wrapper around it.
+      const authorLink = card.locator('a[href^="/profile/"]').first();
+      const authorHref = await authorLink.getAttribute('href');
+      const author = authorHref?.replace('/profile/', '') ?? '';
 
-    const title = (await titleLink.textContent())?.trim() ?? '';
+      const topicEl = card.locator('.tag-default').first();
+      const hasTopic = await topicEl.isVisible().catch(() => false);
+      if (opts.requireTopic && !hasTopic) continue;
+      const topicHref = hasTopic ? await topicEl.getAttribute('href') : null;
+      const topicText = hasTopic ? (await topicEl.textContent())?.trim() ?? null : null;
 
-    await followBtn.click();
-    await expect(card.getByRole('button', { name: 'Unfollow this post' })).toBeVisible();
+      const title = (await titleLink.textContent())?.trim() ?? '';
 
-    return { href, title, author, topicHref, topicText };
+      const stableCard = page.locator('.feed-post-item', { has: page.locator(`a[href="${href}"]`) });
+      return { card: stableCard, href, title, author, topicHref, topicText };
+    }
+
+    await page.mouse.wheel(0, 2000);
+    await page.waitForTimeout(1000);
   }
 
   throw new Error(
@@ -123,6 +142,15 @@ async function followFreshPostFromLatest(page: Page, opts: { requireTopic?: bool
       ? 'No unfollowed post with a topic chip found on Latest to use as a target'
       : 'No unfollowed post found on Latest to use as a target'
   );
+}
+
+/** Follows a fresh post in place on its /latest feed card and returns it. */
+async function followFreshPostFromLatest(page: Page, opts: { requireTopic?: boolean } = {}): Promise<DiscoveredPost> {
+  const { card, ...post } = await findUnfollowedPostOnLatest(page, opts);
+  await card.hover();
+  await card.getByRole('button', { name: 'Follow this post' }).click();
+  await expect(card.getByRole('button', { name: 'Unfollow this post' })).toBeVisible();
+  return post;
 }
 
 /** Unfollows a post by href if currently followed — used for test cleanup. */
@@ -299,95 +327,37 @@ test.describe('Followed Posts — Positive Flow', () => {
   });
 
   test('Phase 9 & 10: Pick any post from the feed, follow it from its full Single Post View, then find it back on Followed Posts', async ({ page }) => {
-    await page.goto(`${BASE_URL}/latest`);
+    const found = await findUnfollowedPostOnLatest(page);
+    await page.goto(`${BASE_URL}${found.href}`);
 
-    // Dynamic target instead of a pinned slug — a fixed post can 404 or
-    // already be followed by the time this runs (same lesson learned in
-    // Report.spec.ts). Scan for any card currently showing "Follow".
-    const cards = page.locator('.feed-post-item');
-    await expect(cards.first()).toBeVisible();
-    const count = await cards.count();
-    let clicked = false;
-    for (let i = 0; i < count; i++) {
-      const card = cards.nth(i);
-      await card.hover();
-      if (await card.getByRole('button', { name: 'Follow this post' }).isVisible().catch(() => false)) {
-        await card.locator('.feed-post-title-link').first().click();
-        clicked = true;
-        break;
-      }
-    }
-    if (!clicked) {
-      throw new Error('No unfollowed post found on Latest to use as a target');
-    }
-
-    // Now on the full Single Post View (not just following in-place on the
-    // card). Not asserting the exact title here — the card's title-link text
-    // can have unrelated body text glued onto it with no separator (confirmed
-    // live: "Comment lifecycle test 1783423357066Seed post for comment
-    // testing..."), so matching it exactly against the page's real <h1> is
-    // fragile. The URL change plus a visible h1 is enough to confirm we
-    // actually landed on a Single Post View.
+    // Not asserting the exact title against the page's <h1> here — a card's
+    // title-link text can have unrelated body text glued onto it with no
+    // separator (confirmed live), so the URL plus a visible h1 is the
+    // reliable signal that we landed on the right Single Post View.
     await expect(page).toHaveURL(/\/post\/.+/);
     await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Follow this post' })).toBeVisible();
 
     await page.getByRole('button', { name: 'Follow this post' }).click();
     await expect(page.getByRole('button', { name: 'Unfollow this post' })).toBeVisible();
-    const followedHref = page.url().replace(BASE_URL, '');
 
     // Check it's now on Followed Posts' Latest tab.
     await page.goto(`${BASE_URL}/my/followed-posts/latest`);
-    await expect(page.locator(`a[href="${followedHref}"]`).first()).toBeVisible();
+    await expect(page.locator(`a[href="${found.href}"]`).first()).toBeVisible();
 
-    // Cleanup: unfollow so the shared account's follow state doesn't drift.
-    await page.goto(`${BASE_URL}${followedHref}`);
-    await page.getByRole('button', { name: 'Unfollow this post' }).click();
-    await expect(page.getByRole('button', { name: 'Follow this post' })).toBeVisible();
+    await unfollowPost(page, found.href);
   });
 
   test('Phase 13: Follow a post directly from a feed card on Latest, without opening it, then see it in Followed Posts', async ({ page }) => {
-    await page.goto(`${BASE_URL}/latest`);
-
-    // Scan for a card not already followed — the shared account accumulates
-    // follows across runs, so a fixed target would flake once it's followed.
-    // Same self-healing scan pattern as Report.spec.ts.
-    const cards = page.locator('.feed-post-item');
-    await expect(cards.first()).toBeVisible();
-    const count = await cards.count();
-    let target: Locator | null = null;
-    let href: string | null = null;
-    for (let i = 0; i < count; i++) {
-      const card = cards.nth(i);
-      // The Follow/Unfollow toggle only renders on hover — without this,
-      // isVisible() is false for every card regardless of follow state,
-      // and the scan finds nothing.
-      await card.hover();
-      const followBtn = card.getByRole('button', { name: 'Follow this post' });
-      if (await followBtn.isVisible().catch(() => false)) {
-        target = card;
-        href = await card.locator('.feed-post-title-link').first().getAttribute('href');
-        break;
-      }
-    }
-    if (!target || !href) {
-      throw new Error('No unfollowed post found on Latest to use as a target');
-    }
-
-    // Follow it in place — this must NOT navigate away from the feed, unlike
-    // clicking the card itself (which opens the Single Post View).
-    await target.hover();
-    await target.getByRole('button', { name: 'Follow this post' }).click();
-    await expect(target.getByRole('button', { name: 'Unfollow this post' })).toBeVisible();
+    const post = await followFreshPostFromLatest(page);
+    // Following happens in place on the card — confirm we never navigated
+    // away, unlike clicking the card itself (which opens the Single Post View).
     await expect(page).toHaveURL(`${BASE_URL}/latest`);
 
     // It should now show up in Followed Posts.
     await page.goto(`${BASE_URL}/my/followed-posts/latest`);
-    await expect(page.locator(`a[href="${href}"]`).first()).toBeVisible();
+    await expect(page.locator(`a[href="${post.href}"]`).first()).toBeVisible();
 
-    // Cleanup: unfollow it again so the shared account's follow state doesn't drift.
-    await page.goto(`${BASE_URL}${href}`);
-    await page.getByRole('button', { name: 'Unfollow this post' }).click();
-    await expect(page.getByRole('button', { name: 'Follow this post' })).toBeVisible();
+    await unfollowPost(page, post.href);
   });
 });
