@@ -51,19 +51,26 @@ async function login(page: Page) {
   await page.locator('#login-password').fill(PASSWORD);
   await page.getByRole('button', { name: 'Log In', exact: true }).click();
   await expect(page).toHaveURL(`${BASE_URL}/trending`);
+}
 
-  // The cookie-consent overlay sits on top of the page on a fresh session and
-  // silently swallows clicks on anything underneath it (confirmed live: every
-  // phase that clicked the "Followed Posts" nav link timed out, while phases
-  // that used page.goto() directly did not). Dismiss it once here so it's
-  // gone before any test tries to click through the left nav.
+/**
+ * The cookie-consent overlay renders with a short async delay after the page
+ * paints — confirmed live via a failure snapshot: it was NOT present right
+ * after login(), yet showed up (and was the active/focused element,
+ * swallowing clicks on anything underneath) by the time goToFollowedPosts()
+ * tried to click the nav link a moment later. Dismissing it once far
+ * upstream in login() is therefore too early; call this immediately before
+ * whatever action it might block instead.
+ */
+async function dismissCookieBanner(page: Page) {
   const acceptCookiesBtn = page.getByRole('button', { name: 'Accept All' });
-  if (await acceptCookiesBtn.isVisible({ timeout: 3000 }).catch(() => false)) {
+  if (await acceptCookiesBtn.isVisible({ timeout: 5000 }).catch(() => false)) {
     await acceptCookiesBtn.click();
   }
 }
 
 async function goToFollowedPosts(page: Page) {
+  await dismissCookieBanner(page);
   // The sidebar link's accessible name is "Followed Posts" (distinct from the
   // in-page "Latest" sub-tab which shares the same href).
   await page.getByRole('link', { name: 'Followed Posts', exact: true }).click();
