@@ -55,8 +55,13 @@ async function login(page: Page) {
 
 // Confirmed via live snapshot: this is a plain <a href="#sidebar-tags"> in the
 // (unlabeled) left sidebar list, not a <button> in a nav[aria-label="Primary"].
+// NOTE: every sidebar icon has alt="TalkTravel", which gets folded into the
+// link's accessible name (real name is "TalkTravel Followed Topics") — so
+// `exact: true` against "Followed Topics" alone never matches. Use a plain
+// text locator instead of role-name matching to sidestep this site-wide
+// icon-name pollution.
 function navToggle(page: Page): Locator {
-  return page.getByRole('link', { name: 'Followed Topics', exact: true });
+  return page.locator('a', { hasText: 'Followed Topics' });
 }
 
 // The link's href points at #sidebar-tags — using that as the dropdown
