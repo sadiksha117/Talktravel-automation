@@ -45,6 +45,20 @@ const POSTS = {
 // -------------------- Helpers --------------------
 
 async function login(page: Page) {
+  // The cookie-consent overlay appears at an unpredictable time — checking
+  // for it once at a fixed point (right after login, or right before a
+  // specific click) kept missing it: two separate live failures showed it
+  // still active and blocking clicks despite both approaches. addLocatorHandler
+  // is the correct tool for exactly this — Playwright re-checks for the
+  // locator during every subsequent action's actionability wait and runs the
+  // handler whenever it actually appears, rather than at one guessed moment.
+  await page.addLocatorHandler(
+    page.getByRole('button', { name: 'Accept All' }),
+    async () => {
+      await page.getByRole('button', { name: 'Accept All' }).click();
+    }
+  );
+
   await page.goto(`${BASE_URL}/login`);
   // selectors based on captured input ids: #login-identifier / #login-password
   await page.locator('#login-identifier').fill(EMAIL);
@@ -53,24 +67,7 @@ async function login(page: Page) {
   await expect(page).toHaveURL(`${BASE_URL}/trending`);
 }
 
-/**
- * The cookie-consent overlay renders with a short async delay after the page
- * paints — confirmed live via a failure snapshot: it was NOT present right
- * after login(), yet showed up (and was the active/focused element,
- * swallowing clicks on anything underneath) by the time goToFollowedPosts()
- * tried to click the nav link a moment later. Dismissing it once far
- * upstream in login() is therefore too early; call this immediately before
- * whatever action it might block instead.
- */
-async function dismissCookieBanner(page: Page) {
-  const acceptCookiesBtn = page.getByRole('button', { name: 'Accept All' });
-  if (await acceptCookiesBtn.isVisible({ timeout: 5000 }).catch(() => false)) {
-    await acceptCookiesBtn.click();
-  }
-}
-
 async function goToFollowedPosts(page: Page) {
-  await dismissCookieBanner(page);
   // The sidebar link's accessible name is "Followed Posts" (distinct from the
   // in-page "Latest" sub-tab which shares the same href).
   await page.getByRole('link', { name: 'Followed Posts', exact: true }).click();
