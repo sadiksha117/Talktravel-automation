@@ -24,8 +24,19 @@
 //     unlabeled sidebar list — NOT a <button> inside nav[aria-label="Primary"]
 //     as the doc guessed. Clicking it appends "#sidebar-tags" to the URL
 //     (the doc's "URL does NOT change" claim does not hold for the real impl).
+//   - CONFIRMED: every sidebar icon has alt="TalkTravel", which gets folded
+//     into the link's accessible name (e.g. real name is "TalkTravel Followed
+//     Topics") — role-name matching with `exact: true` (or an anchored regex)
+//     against the visible text alone will not match. Use text-based locators
+//     for sidebar items instead.
 //   - CONFIRMED: topic URLs are /tags/{slug} (e.g. /tags/Europe), not
 //     /topic/{slug} as the doc guessed — matches src/pages/SingleTopicView.ts.
+//   - CONFIRMED: the topic detail page has a single "Follow" button (no icon)
+//     that never relabels to "Unfollow" — unlike the Posts feature, where the
+//     button does flip label (see followed-posts.spec.ts). Follow/unfollow
+//     state is instead announced via an aria-live `status` region (observed
+//     text: "Unfollowed topic"; "Followed topic" is the assumed positive
+//     counterpart, unconfirmed).
 //   - UNCONFIRMED (best-effort guess pending a passing run): the expanded
 //     dropdown container is assumed to be #sidebar-tags (from the link's
 //     href); topic row / "Browse all topics" / empty-state selectors are
@@ -76,26 +87,36 @@ async function expandDropdown(page: Page) {
   await expect(dropdown(page)).toBeVisible();
 }
 
+// Confirmed via live snapshot: the topic page has a single "Follow" button
+// that never relabels to "Unfollow" — it's a static toggle action, not a
+// state label. Follow/unfollow state is communicated via an aria-live
+// `status` region (observed text: "Unfollowed topic"; "Followed topic" is
+// the assumed positive counterpart, unconfirmed).
+function topicFollowToggle(page: Page): Locator {
+  return page.getByRole('button', { name: 'Follow', exact: true });
+}
+
+async function setTopicFollowState(page: Page, slug: string, wantFollowed: boolean) {
+  await page.goto(`${BASE_URL}/tags/${slug}`);
+  const status = page.getByRole('status');
+  const wantedPattern = wantFollowed ? /^(?!.*unfollow).*follow/i : /unfollow/i;
+
+  await topicFollowToggle(page).click();
+  if (!(await status.filter({ hasText: wantedPattern }).isVisible().catch(() => false))) {
+    // First click landed on the opposite state (topic was already in the
+    // target state before this call) — toggle again to reach the target.
+    await topicFollowToggle(page).click();
+  }
+  await expect(status).toHaveText(wantedPattern);
+}
+
 /** Ensures the given topic is in the "Following" state; follows it if not. */
 async function ensureTopicFollowed(page: Page, slug: string) {
-  await page.goto(`${BASE_URL}/tags/${slug}`);
-  const followBtn = page.getByRole('button', { name: /^follow/i });
-  const unfollowBtn = page.getByRole('button', { name: /^unfollow/i });
-  if (await followBtn.isVisible().catch(() => false)) {
-    await followBtn.click();
-    await expect(unfollowBtn).toBeVisible();
-  } else {
-    await expect(unfollowBtn).toBeVisible();
-  }
+  await setTopicFollowState(page, slug, true);
 }
 
 async function ensureTopicUnfollowed(page: Page, slug: string) {
-  await page.goto(`${BASE_URL}/tags/${slug}`);
-  const unfollowBtn = page.getByRole('button', { name: /^unfollow/i });
-  if (await unfollowBtn.isVisible().catch(() => false)) {
-    await unfollowBtn.click();
-    await expect(page.getByRole('button', { name: /^follow/i })).toBeVisible();
-  }
+  await setTopicFollowState(page, slug, false);
 }
 
 // -------------------- Suite --------------------
@@ -171,10 +192,7 @@ test.describe('Left Nav — Followed Topics Dropdown — Positive Flow', () => {
 
   test('Step 7: Following a topic from its detail page makes it appear in the dropdown', async ({ page }) => {
     await ensureTopicUnfollowed(page, TOPIC_SLUG);
-
-    await page.goto(`${BASE_URL}/tags/${TOPIC_SLUG}`);
-    await page.getByRole('button', { name: /^follow/i }).click();
-    await expect(page.getByRole('button', { name: /^unfollow/i })).toBeVisible();
+    await ensureTopicFollowed(page, TOPIC_SLUG);
 
     await expandDropdown(page);
     await expect(dropdown(page).locator(`a[href="/tags/${TOPIC_SLUG}"]`)).toBeVisible();
@@ -182,10 +200,7 @@ test.describe('Left Nav — Followed Topics Dropdown — Positive Flow', () => {
 
   test('Step 8: Unfollowing a topic from its detail page removes it from the dropdown', async ({ page }) => {
     await ensureTopicFollowed(page, TOPIC_SLUG);
-
-    await page.goto(`${BASE_URL}/tags/${TOPIC_SLUG}`);
-    await page.getByRole('button', { name: /^unfollow/i }).click();
-    await expect(page.getByRole('button', { name: /^follow/i })).toBeVisible();
+    await ensureTopicUnfollowed(page, TOPIC_SLUG);
 
     await expandDropdown(page);
     await expect(dropdown(page).locator(`a[href="/tags/${TOPIC_SLUG}"]`)).not.toBeVisible();
