@@ -68,9 +68,14 @@ async function login(page: Page) {
 }
 
 async function goToFollowedPosts(page: Page) {
-  // The sidebar link's accessible name is "Followed Posts" (distinct from the
-  // in-page "Latest" sub-tab which shares the same href).
-  await page.getByRole('link', { name: 'Followed Posts', exact: true }).click();
+  // The sidebar link's REAL accessible name is "TalkTravel Followed Posts"
+  // (the icon's alt text prefixes every sidebar link, confirmed live via an
+  // accessibility snapshot — "TalkTravel Home", "TalkTravel Friends", etc.).
+  // exact: true was requiring the full name to equal "Followed Posts"
+  // exactly, which never matched anything — the locator resolved to zero
+  // elements and the click waited out its full timeout every single time.
+  // No overlay or timing issue was ever involved; this was the whole bug.
+  await page.getByRole('link', { name: 'Followed Posts' }).click();
   await expect(page).toHaveURL(`${BASE_URL}/my/followed-posts/latest`);
 }
 
