@@ -33,14 +33,7 @@ const BASE_URL = 'https://staging.talktravel.com';
 const EMAIL = process.env.TEST_EMAIL ?? 'prempoudel72707@gmail.com';
 const PASSWORD = process.env.TEST_PASSWORD ?? 'Admin@123';
 
-// Known seeded posts on staging used throughout the flow (captured during execution)
-const POSTS = {
-  secondPost: { slug: '/post/pokhara-2', title: 'Pokhara', author: 'Test12789', topic: 'Hotelscom' },
-  thirdPost: { slug: '/post/new-post-29', title: 'New post', author: 'silver-express' },
-  setupA: { slug: '/post/hi-6', title: 'hi', author: 'silver-express' },
-  setupB: { slug: '/post/hello-tt', title: 'hello TT', author: 'Rumi' },
-  setupC: { slug: '/post/ok', title: 'Ok', author: 'Jajanumsoda' },
-};
+type DiscoveredPost = { href: string; title: string; author: string; topicHref: string | null; topicText: string | null };
 
 // -------------------- Helpers --------------------
 
@@ -79,16 +72,66 @@ async function goToFollowedPosts(page: Page) {
   await expect(page).toHaveURL(`${BASE_URL}/my/followed-posts/latest`);
 }
 
-/** Ensures a given post (by slug) is in the "Following" state; follows it if not. */
-async function ensureFollowed(page: Page, slug: string) {
-  await page.goto(`${BASE_URL}${slug}`);
-  const followBtn = page.getByRole('button', { name: 'Follow this post' });
-  const unfollowBtn = page.getByRole('button', { name: 'Unfollow this post' });
-  if (await followBtn.isVisible().catch(() => false)) {
+/**
+ * Follows the first not-yet-followed post found on /latest, in place on its
+ * feed card, and returns its real title/author/topic as captured live.
+ * Hardcoded slugs on this staging environment go stale fast — confirmed
+ * live: every POSTS.* constant this file originally pinned had either been
+ * unfollowed by other test runs or dropped off /latest by the next run,
+ * within about a day of being captured. requireTopic skips candidates with
+ * no topic chip, for tests that need one to click.
+ */
+async function followFreshPostFromLatest(page: Page, opts: { requireTopic?: boolean } = {}): Promise<DiscoveredPost> {
+  await page.goto(`${BASE_URL}/latest`);
+  const cards = page.locator('.feed-post-item');
+  await expect(cards.first()).toBeVisible();
+  const count = await cards.count();
+
+  for (let i = 0; i < count; i++) {
+    const card = cards.nth(i);
+    await card.hover();
+    const followBtn = card.getByRole('button', { name: 'Follow this post' });
+    if (!(await followBtn.isVisible().catch(() => false))) continue;
+
+    const titleLink = card.locator('.feed-post-title-link').first();
+    const href = await titleLink.getAttribute('href');
+    if (!href) continue;
+
+    // Extracted via the universal a[href^="/profile/"] pattern rather than
+    // the .feed-post-meta-user class, since it's ambiguous whether that
+    // class is on the anchor itself or a wrapper around it.
+    const authorLink = card.locator('a[href^="/profile/"]').first();
+    const authorHref = await authorLink.getAttribute('href');
+    const author = authorHref?.replace('/profile/', '') ?? '';
+
+    const topicEl = card.locator('.tag-default').first();
+    const hasTopic = await topicEl.isVisible().catch(() => false);
+    if (opts.requireTopic && !hasTopic) continue;
+    const topicHref = hasTopic ? await topicEl.getAttribute('href') : null;
+    const topicText = hasTopic ? (await topicEl.textContent())?.trim() ?? null : null;
+
+    const title = (await titleLink.textContent())?.trim() ?? '';
+
     await followBtn.click();
-    await expect(unfollowBtn).toBeVisible();
-  } else {
-    await expect(unfollowBtn).toBeVisible();
+    await expect(card.getByRole('button', { name: 'Unfollow this post' })).toBeVisible();
+
+    return { href, title, author, topicHref, topicText };
+  }
+
+  throw new Error(
+    opts.requireTopic
+      ? 'No unfollowed post with a topic chip found on Latest to use as a target'
+      : 'No unfollowed post found on Latest to use as a target'
+  );
+}
+
+/** Unfollows a post by href if currently followed — used for test cleanup. */
+async function unfollowPost(page: Page, href: string) {
+  await page.goto(`${BASE_URL}${href}`);
+  const unfollowBtn = page.getByRole('button', { name: 'Unfollow this post' });
+  if (await unfollowBtn.isVisible().catch(() => false)) {
+    await unfollowBtn.click();
+    await expect(page.getByRole('button', { name: 'Follow this post' })).toBeVisible();
   }
 }
 
@@ -123,18 +166,20 @@ test.describe('Followed Posts — Positive Flow', () => {
   });
 
   test('Phase 2: Followed post cards render title, author, topic, votes, comments, timestamp, Following state', async ({ page }) => {
-    // Ensure the 3 setup posts (followed in Phase 0) are present for this check
-    await ensureFollowed(page, POSTS.setupA.slug);
-    await ensureFollowed(page, POSTS.setupB.slug);
-    await ensureFollowed(page, POSTS.setupC.slug);
+    // Follow 3 distinct fresh posts rather than relying on pre-seeded ones —
+    // see followFreshPostFromLatest for why pinned posts don't hold up here.
+    const followed: DiscoveredPost[] = [];
+    for (let i = 0; i < 3; i++) {
+      followed.push(await followFreshPostFromLatest(page));
+    }
 
     await goToFollowedPosts(page);
 
-    for (const post of [POSTS.setupA, POSTS.setupB, POSTS.setupC]) {
-      const card = page.locator('.feed-post-item', { has: page.locator(`a[href="${post.slug}"]`) });
+    for (const post of followed) {
+      const card = page.locator('.feed-post-item', { has: page.locator(`a[href="${post.href}"]`) });
       await expect(card).toBeVisible();
       await expect(card.locator('.feed-post-title-link')).toHaveText(post.title);
-      await expect(card.locator('.feed-post-meta-user')).toContainText(post.author);
+      await expect(card.locator('a[href^="/profile/"]').first()).toContainText(post.author);
       await expect(card.locator('.tag-default').first()).toBeVisible();
       await expect(card.locator('.feed-post-rating span')).toBeVisible();
       await expect(card.locator('.feed-post-meta-comments')).toBeVisible();
@@ -142,6 +187,10 @@ test.describe('Followed Posts — Positive Flow', () => {
       // Actual observed "Following" state is rendered as an "Unfollow" toggle button
       // (aria-label="Unfollow this post"), not literal text "Following".
       await expect(card.getByRole('button', { name: 'Unfollow this post' })).toBeVisible();
+    }
+
+    for (const post of followed) {
+      await unfollowPost(page, post.href);
     }
   });
 
@@ -174,64 +223,79 @@ test.describe('Followed Posts — Positive Flow', () => {
   });
 
   test('Phase 4: Clicking a post title opens Single Post View and back returns to intact list', async ({ page }) => {
+    const post = await followFreshPostFromLatest(page);
     await goToFollowedPosts(page);
 
-    const secondCard = page.locator('.feed-post-item').nth(1);
-    await expect(secondCard.locator('.feed-post-title-link')).toHaveText(POSTS.secondPost.title);
-    await secondCard.locator('.feed-post-title-link').click();
+    const card = page.locator('.feed-post-item', { has: page.locator(`a[href="${post.href}"]`) });
+    await expect(card.locator('.feed-post-title-link')).toHaveText(post.title);
+    await card.locator('.feed-post-title-link').click();
 
-    await expect(page).toHaveURL(`${BASE_URL}${POSTS.secondPost.slug}`);
-    await expect(page.getByRole('heading', { name: POSTS.secondPost.title, level: 1 })).toBeVisible();
+    // Not asserting the exact title against the page's <h1> here — a card's
+    // title-link text can have unrelated body text glued onto it with no
+    // separator (confirmed live), so the URL plus a visible h1 is the
+    // reliable signal that we landed on the right Single Post View.
+    await expect(page).toHaveURL(`${BASE_URL}${post.href}`);
+    await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Unfollow this post' })).toBeVisible();
 
     await page.goBack();
     await expect(page).toHaveURL(`${BASE_URL}/my/followed-posts/latest`);
-    await expect(page.locator('.feed-post-item').nth(1).locator('.feed-post-title-link')).toHaveText(POSTS.secondPost.title);
+    await expect(page.locator(`a[href="${post.href}"]`).first()).toBeVisible();
+
+    await unfollowPost(page, post.href);
   });
 
   test('Phase 5: Clicking a topic chip opens the topic page and back returns to Followed Posts', async ({ page }) => {
+    const post = await followFreshPostFromLatest(page, { requireTopic: true });
     await goToFollowedPosts(page);
 
-    const secondCard = page.locator('.feed-post-item').nth(1);
-    await secondCard.locator('.tag-default', { hasText: POSTS.secondPost.topic }).click();
+    const card = page.locator('.feed-post-item', { has: page.locator(`a[href="${post.href}"]`) });
+    await card.locator('.tag-default').first().click();
 
-    await expect(page).toHaveURL(new RegExp(`/tags/${POSTS.secondPost.topic}`));
-    await expect(page.getByRole('heading', { name: POSTS.secondPost.topic })).toBeVisible();
+    // Match by the topic chip's own href rather than reconstructing a URL
+    // from its display text, which can be spaced/encoded differently.
+    await expect(page).toHaveURL(new RegExp(`${post.topicHref}(/|$)`));
+    await expect(page.getByRole('heading', { name: post.topicText ?? '' })).toBeVisible();
 
     await page.goBack();
     await expect(page).toHaveURL(`${BASE_URL}/my/followed-posts/latest`);
+
+    await unfollowPost(page, post.href);
   });
 
   test('Phase 6: Clicking an author name opens their profile and back returns to Followed Posts', async ({ page }) => {
+    const post = await followFreshPostFromLatest(page);
     await goToFollowedPosts(page);
 
-    const secondCard = page.locator('.feed-post-item').nth(1);
-    await secondCard.locator('.feed-post-meta-user', { hasText: POSTS.secondPost.author }).click();
+    const card = page.locator('.feed-post-item', { has: page.locator(`a[href="${post.href}"]`) });
+    await card.locator('a[href^="/profile/"]').first().click();
 
-    await expect(page).toHaveURL(`${BASE_URL}/profile/${POSTS.secondPost.author}`);
-    await expect(page.getByRole('heading', { name: POSTS.secondPost.author })).toBeVisible();
+    await expect(page).toHaveURL(`${BASE_URL}/profile/${post.author}`);
+    await expect(page.getByRole('heading', { name: post.author })).toBeVisible();
 
     await page.goBack();
     await expect(page).toHaveURL(`${BASE_URL}/my/followed-posts/latest`);
+
+    await unfollowPost(page, post.href);
   });
 
   test('Phase 7 & 8: Inline unfollow updates button immediately; card removal is only reflected after reload', async ({ page }) => {
-    await ensureFollowed(page, POSTS.thirdPost.slug);
+    const post = await followFreshPostFromLatest(page);
     await goToFollowedPosts(page);
 
-    const thirdCard = page.locator('.feed-post-item', { has: page.locator(`a[href="${POSTS.thirdPost.slug}"]`) });
-    await expect(thirdCard).toBeVisible();
-    await thirdCard.hover();
-    await thirdCard.getByRole('button', { name: 'Unfollow this post' }).click();
+    const card = page.locator('.feed-post-item', { has: page.locator(`a[href="${post.href}"]`) });
+    await expect(card).toBeVisible();
+    await card.hover();
+    await card.getByRole('button', { name: 'Unfollow this post' }).click();
 
     // ACTUAL OBSERVED BEHAVIOR: button flips to "Follow" but the card is NOT
     // instantly removed from the list (deviates from flow doc expectation).
-    await expect(thirdCard.getByRole('button', { name: 'Follow this post' })).toBeVisible();
-    await expect(page.locator(`a[href="${POSTS.thirdPost.slug}"]`)).toHaveCount(1);
+    await expect(card.getByRole('button', { name: 'Follow this post' })).toBeVisible();
+    await expect(page.locator(`a[href="${post.href}"]`)).toHaveCount(1);
 
     // Phase 8: after a reload, the unfollowed post is no longer in the list.
     await page.reload();
-    await expect(page.locator(`a[href="${POSTS.thirdPost.slug}"]`)).toHaveCount(0);
+    await expect(page.locator(`a[href="${post.href}"]`)).toHaveCount(0);
   });
 
   test('Phase 9 & 10: Pick any post from the feed, follow it from its full Single Post View, then find it back on Followed Posts', async ({ page }) => {
@@ -325,21 +389,5 @@ test.describe('Followed Posts — Positive Flow', () => {
     await page.goto(`${BASE_URL}${href}`);
     await page.getByRole('button', { name: 'Unfollow this post' }).click();
     await expect(page.getByRole('button', { name: 'Follow this post' })).toBeVisible();
-  });
-
-  test('Cleanup: unfollow posts followed during setup', async ({ page }) => {
-    for (const post of [POSTS.setupA, POSTS.setupB, POSTS.setupC]) {
-      await page.goto(`${BASE_URL}${post.slug}`);
-      const unfollowBtn = page.getByRole('button', { name: 'Unfollow this post' });
-      if (await unfollowBtn.isVisible().catch(() => false)) {
-        await unfollowBtn.click();
-        await expect(page.getByRole('button', { name: 'Follow this post' })).toBeVisible();
-      }
-    }
-
-    await page.goto(`${BASE_URL}/my/followed-posts/latest`);
-    for (const post of [POSTS.setupA, POSTS.setupB, POSTS.setupC]) {
-      await expect(page.locator(`a[href="${post.slug}"]`)).toHaveCount(0);
-    }
   });
 });
