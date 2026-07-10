@@ -16,14 +16,15 @@
 // alternative (aria-label, class name, or visible text) was used and is
 // noted inline.
 //
-// Two real product behaviors were observed that diverge from the flow
-// doc's assumptions; the spec asserts the ACTUAL observed behavior:
-//   1) Phase 7: unfollowing a post from the Followed Posts list does NOT
-//      remove its card instantly — the button flips to "Follow" but the
-//      card stays until the page is reloaded.
-//   2) Phase 12: the 3-dot menu on a post NOT authored by the logged-in
-//      user shows "Report Post" AND "Edit Post"/"Remove Post", because
-//      this test account holds Moderator/Admin privileges.
+// One real product behavior was observed that diverges from the flow doc's
+// assumptions; the spec asserts the ACTUAL observed behavior:
+//   Phase 7: unfollowing a post from the Followed Posts list does NOT
+//   remove its card instantly — the button flips to "Follow" but the
+//   card stays until the page is reloaded.
+//
+// The 3-dot menu (Edit/Delete/Report) is intentionally NOT covered here —
+// that's a separate flow already tested by Report.spec.ts, EditPost.spec.ts,
+// and DeletePost.spec.ts.
 // ============================================================================
 
 import { test, expect, Page, Locator } from '@playwright/test';
@@ -34,7 +35,6 @@ const PASSWORD = process.env.TEST_PASSWORD ?? 'Admin@123';
 
 // Known seeded posts on staging used throughout the flow (captured during execution)
 const POSTS = {
-  ownFirst: { slug: '/post/hiii-hskh', title: 'hiii hskh', author: 'prempoudel_1' },
   secondPost: { slug: '/post/pokhara-2', title: 'Pokhara', author: 'Test12789', topic: 'Hotelscom' },
   thirdPost: { slug: '/post/new-post-29', title: 'New post', author: 'silver-express' },
   setupA: { slug: '/post/hi-6', title: 'hi', author: 'silver-express' },
@@ -277,43 +277,6 @@ test.describe('Followed Posts — Positive Flow', () => {
     await expect(page.getByRole('button', { name: 'Follow this post' })).toBeVisible();
   });
 
-  test('Phase 11: 3-dot menu on own post shows Edit/Delete and never Report', async ({ page }) => {
-    await goToFollowedPosts(page);
-
-    const ownCard = page.locator('.feed-post-item', { has: page.locator(`a[href="${POSTS.ownFirst.slug}"]`) });
-    await ownCard.hover();
-    await ownCard.getByRole('button', { name: 'Post options' }).click();
-
-    await expect(page.getByText('Edit Post', { exact: true })).toBeVisible();
-    await expect(page.getByText('Delete Post', { exact: true })).toBeVisible();
-    await expect(page.getByText('Report Post', { exact: true })).not.toBeVisible();
-
-    // Close menu without action
-    await page.keyboard.press('Escape');
-    await expect(page.getByText('Edit Post', { exact: true })).not.toBeVisible();
-  });
-
-  test('Phase 12: 3-dot menu on others post shows Report (and, for this moderator account, also Edit/Remove)', async ({ page }) => {
-    await goToFollowedPosts(page);
-
-    const othersCard = page.locator('.feed-post-item', { has: page.locator(`a[href="${POSTS.secondPost.slug}"]`) });
-    await othersCard.hover();
-    await othersCard.getByRole('button', { name: 'Post options' }).click();
-
-    await expect(page.getByText('Report Post', { exact: true })).toBeVisible();
-
-    // ACTUAL OBSERVED BEHAVIOR: this test account has Moderator/Admin
-    // privileges (confirmed via the account menu's "Admin Dashboard" /
-    // "Moderator Dashboard" entries), so "Edit Post" and "Remove Post" are
-    // ALSO shown here — unlike a regular, non-moderator user would see.
-    await expect(page.getByText('Edit Post', { exact: true })).toBeVisible();
-    await expect(page.getByText('Remove Post', { exact: true })).toBeVisible();
-
-    // Close menu without action
-    await page.keyboard.press('Escape');
-    await expect(page.getByText('Report Post', { exact: true })).not.toBeVisible();
-  });
-
   test('Phase 13: Follow a post directly from a feed card on Latest, without opening it, then see it in Followed Posts', async ({ page }) => {
     await page.goto(`${BASE_URL}/latest`);
 
@@ -327,9 +290,9 @@ test.describe('Followed Posts — Positive Flow', () => {
     let href: string | null = null;
     for (let i = 0; i < count; i++) {
       const card = cards.nth(i);
-      // The Follow/Unfollow toggle and "Post options" only render on hover
-      // (same as Phase 11/12) — without this, isVisible() is false for
-      // every card regardless of follow state, and the scan finds nothing.
+      // The Follow/Unfollow toggle only renders on hover — without this,
+      // isVisible() is false for every card regardless of follow state,
+      // and the scan finds nothing.
       await card.hover();
       const followBtn = card.getByRole('button', { name: 'Follow this post' });
       if (await followBtn.isVisible().catch(() => false)) {
