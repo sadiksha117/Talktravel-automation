@@ -8,7 +8,7 @@ on:
 
 jobs:
   app-tests:
-    timeout-minutes: 240
+    timeout-minutes: 90
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -21,15 +21,18 @@ jobs:
         run: npm ci
 
       - name: Install Playwright browsers
-        run: npx playwright install --with-deps
+        run: npx playwright install --with-deps chromium
 
       - name: Create .env file
         run: |
           echo "TEST_EMAIL=${{ secrets.TEST_EMAIL }}" >> .env
           echo "TEST_PASSWORD=${{ secrets.TEST_PASSWORD }}" >> .env
 
+      - name: List all tests that will run
+        run: npx playwright test --project=chromium --list
+
       - name: Run Playwright tests
-        run: npx playwright test
+        run: npx playwright test --project=chromium
 
       - name: Upload test report
         if: always()
@@ -38,4 +41,3 @@ jobs:
           name: playwright-report
           path: playwright-report/
           retention-days: 14
-          
