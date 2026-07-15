@@ -1,7 +1,6 @@
 import { defineConfig, devices } from '@playwright/test';
 import { existsSync, readFileSync } from 'fs';
 import { join } from 'path';
-
 /**
  * Minimal .env loader with no external dependency — the `dotenv` package
  * broke on a machine whose node_modules hadn't been reinstalled after the
@@ -24,11 +23,10 @@ function loadEnvFile(path: string): void {
     if (!(key in process.env)) process.env[key] = value;
   }
 }
-
 loadEnvFile(join(__dirname, '.env'));
-
 export default defineConfig({
   testDir: './tests',
+  testIgnore: '**/exploratory/**',
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
   // Retry flaky specs (transient editor-hydration / network hiccups on staging).
