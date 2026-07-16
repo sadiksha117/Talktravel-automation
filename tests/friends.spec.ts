@@ -97,13 +97,23 @@ async function dropdown(page: Page): Promise<Locator> {
 async function expandDropdown(page: Page) {
   await navToggle(page).click();
   await expect(navToggle(page)).toHaveAttribute('aria-expanded', 'true');
-  await expect(await dropdown(page)).toBeVisible();
+  const list = await dropdown(page);
+  await expect(list).toBeVisible();
+  // Confirmed live: a real run's error output showed aria-expanded flips to
+  // "true" synchronously on click, before Bootstrap's collapse animation
+  // finishes — clicking again immediately (e.g. to collapse) during that
+  // window gets silently ignored, exactly the race documented in
+  // followed-topics.spec.ts. Waiting for the settled "show" class blocks
+  // until the transition is actually done.
+  await expect(list).toHaveClass(/\bshow\b/);
 }
 
 async function collapseDropdown(page: Page) {
+  const list = await dropdown(page);
   await navToggle(page).click();
   await expect(navToggle(page)).toHaveAttribute('aria-expanded', 'false');
-  await expect(await dropdown(page)).not.toBeVisible();
+  await expect(list).not.toBeVisible();
+  await expect(list).not.toHaveClass(/\bshow\b/);
 }
 
 function friendRows(list: Locator): Locator {
