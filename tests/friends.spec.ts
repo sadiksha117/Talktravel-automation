@@ -17,28 +17,28 @@
 // SELECTOR STATUS
 // ----------------------------------------------------------------------------
 // This session's network policy blocks outbound access to
-// staging.talktravel.com, so selectors were corrected using a real Playwright
-// Codegen recording run and shared back into the session (rather than a live
-// run from inside this sandbox):
-//   - CONFIRMED: the "Friends" nav toggle is a plain `<a>` link, not a
-//     `button`/`data-testid` as the doc guessed — accessible name is
-//     "TalkTravel Friends" (the icon's alt="TalkTravel" gets folded in),
-//     matching the exact same site-wide icon-name pollution already
-//     confirmed for Followed Topics in followed-topics.spec.ts. Use a
-//     text-based `<a>` locator, not role-name `exact` matching.
+// staging.talktravel.com, so selectors were corrected from real Codegen
+// recordings and a real `playwright test` run's error output (both shared
+// back into the session), not a live run from inside this sandbox:
+//   - CONFIRMED (from a strict-mode-violation error dump on the first real
+//     run): the "Friends" nav toggle is
+//     `<a href="#sidebar-users" aria-expanded="false" data-bs-toggle="collapse"
+//       class="nav-link dropdown-toggle collapsed">` — a Bootstrap collapse
+//     component, structurally identical to Followed Topics' `#sidebar-tags`,
+//     except the real anchor here is `#sidebar-users` (not `#sidebar-friends`
+//     as previously assumed) and it DOES expose `aria-expanded`.
+//     `page.locator('a', { hasText: 'Friends' })` (an earlier guess) is NOT
+//     unique — it also matches two unrelated `<a href="/friends"
+//     class="dropdown-item">` menu items elsewhere on the page. `navToggle()`
+//     now targets `a[href="#sidebar-users"]` directly.
 //   - CONFIRMED: the empty-state text is exactly "No friends yet".
-//   - INFERRED, NOT YET CONFIRMED: the dropdown container. The doc's
-//     `[data-testid="friends-dropdown"]` was never seen in the recording.
-//     Given the doc's own claim that this dropdown is "structurally
-//     identical to the Followed Topics dropdown" (a Bootstrap `collapse`
-//     component toggled via `<a href="#sidebar-tags">`), `dropdown()` below
-//     reads the toggle's own `href` at runtime instead of hardcoding a guessed
-//     id/class — this works whether the real id is `#sidebar-friends` or
-//     something else, as long as the same Bootstrap collapse pattern holds.
-//     Falls back to the doc's data-testid guess if the toggle isn't an
-//     `href="#..."` anchor. STILL NEEDS a real DOM snapshot of the expanded
-//     panel to fully confirm (container id/class, friend row markup, avatar/
-//     nickname selectors, "See all" markup).
+//   - CONFIRMED: "See all" is a `link` role with exact accessible name
+//     "See all" (no icon-name pollution on this one).
+//   - STILL UNCONFIRMED: friend-row / avatar / nickname markup inside the
+//     populated dropdown — no live snapshot of a populated, expanded
+//     dropdown has been captured yet (Codegen runs so far went straight from
+//     opening the dropdown to clicking "See all", without inspecting the
+//     row markup itself).
 //
 // SEEDING: the doc calls for seeding friendships via API in `beforeEach`,
 // but no such endpoint/helper exists in this repo yet. Steps that need a
@@ -68,21 +68,24 @@ async function login(page: Page) {
   await expect(page).toHaveURL(`${BASE_URL}/trending`);
 }
 
-// CONFIRMED via a live Codegen recording: this is a plain `<a>` link, not a
-// `button`/`data-testid` as the doc guessed. Its accessible name is
-// "TalkTravel Friends" (icon alt="TalkTravel" folds into the name) — mirrors
-// the Followed Topics nav item exactly, so a text-based `<a>` locator is used
-// instead of role-name matching to sidestep the same icon-name pollution.
+// CONFIRMED via a real staging test run's error output (strict-mode
+// violation dump): the toggle is
+// `<a href="#sidebar-users" aria-expanded="false" data-bs-toggle="collapse"
+//   class="nav-link dropdown-toggle collapsed">` — a Bootstrap collapse
+// component, same pattern as Followed Topics' `#sidebar-tags`, except this
+// one's real anchor is `#sidebar-users` (not `#sidebar-friends` as
+// previously assumed) and it DOES expose `aria-expanded`.
+// `page.locator('a', { hasText: 'Friends' })` is NOT unique — it also
+// matched two unrelated `<a href="/friends" class="dropdown-item">` menu
+// items elsewhere on the page, which is exactly what broke on the first
+// live run (strict mode violation, 3 matches). Target the toggle directly.
 function navToggle(page: Page): Locator {
-  return page.locator('a', { hasText: 'Friends' });
+  return page.locator('a[href="#sidebar-users"]');
 }
 
-// UNCONFIRMED: the actual dropdown container markup was never captured in
-// the recording. Rather than hardcode a guessed id/class, this reads the
-// toggle's own `href` at runtime — if it's a Bootstrap collapse anchor
-// (`href="#some-id"`, the same pattern confirmed for Followed Topics), this
-// resolves to the real container regardless of its exact id. Falls back to
-// the doc's data-testid guess otherwise.
+// CONFIRMED: resolves to the same #sidebar-users Bootstrap collapse panel
+// via the toggle's own href (kept dynamic rather than hardcoding "#sidebar-
+// users" a second time, in case the id ever changes).
 async function dropdown(page: Page): Promise<Locator> {
   const href = await navToggle(page).getAttribute('href');
   if (href && href.startsWith('#')) {
@@ -93,11 +96,13 @@ async function dropdown(page: Page): Promise<Locator> {
 
 async function expandDropdown(page: Page) {
   await navToggle(page).click();
+  await expect(navToggle(page)).toHaveAttribute('aria-expanded', 'true');
   await expect(await dropdown(page)).toBeVisible();
 }
 
 async function collapseDropdown(page: Page) {
   await navToggle(page).click();
+  await expect(navToggle(page)).toHaveAttribute('aria-expanded', 'false');
   await expect(await dropdown(page)).not.toBeVisible();
 }
 
