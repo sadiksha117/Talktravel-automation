@@ -48,7 +48,13 @@ export default defineConfig({
   projects: [
     {
       name: 'chromium',
-      use: { ...devices['Desktop Chrome'] },
+      use: {
+        ...devices['Desktop Chrome'],
+        // Pre-installed browser build (1194) is older than what this
+        // @playwright/test version (1.60.0) expects to download (1223).
+        // Point at the pre-installed executable instead of fetching a new one.
+        launchOptions: { executablePath: '/opt/pw-browsers/chromium' },
+      },
     },
     {
       name: 'firefox',
