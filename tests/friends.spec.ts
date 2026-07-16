@@ -105,8 +105,10 @@ function friendRows(list: Locator): Locator {
   return list.locator('a[href^="/user/"]');
 }
 
+// CONFIRMED via a live Codegen recording: "See all" is a `link` role with
+// exact accessible name "See all" (no icon-name pollution on this one).
 function seeAllLink(list: Locator): Locator {
-  return list.getByText('See all');
+  return list.getByRole('link', { name: 'See all', exact: true });
 }
 
 // -------------------- Suite --------------------
