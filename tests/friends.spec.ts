@@ -17,23 +17,37 @@
 // SELECTOR STATUS
 // ----------------------------------------------------------------------------
 // This session's network policy blocks outbound access to
-// staging.talktravel.com (confirmed: `curl` to it times out), so unlike
-// followed-topics.spec.ts / followed-posts.spec.ts, none of the selectors
-// below have been corrected against a live DOM snapshot yet. They are the
-// doc's own "Suggested Playwright selectors", used as-is. The doc itself
-// states the Friends dropdown is "structurally identical to the Followed
-// Topics dropdown" — and a live run against that dropdown showed its real
-// markup differs substantially from its own doc's guesses (a plain
-// `<a href="#sidebar-tags">` Bootstrap `collapse`, not a
-// `nav[aria-label="Primary"] >> button` with `data-testid`s). Expect the
-// same kind of correction to be needed here once this suite is run against
-// staging — treat every locator below as UNCONFIRMED.
+// staging.talktravel.com, so selectors were corrected from real Codegen
+// recordings and a real `playwright test` run's error output (both shared
+// back into the session), not a live run from inside this sandbox:
+//   - CONFIRMED (from a strict-mode-violation error dump on the first real
+//     run): the "Friends" nav toggle is
+//     `<a href="#sidebar-users" aria-expanded="false" data-bs-toggle="collapse"
+//       class="nav-link dropdown-toggle collapsed">` — a Bootstrap collapse
+//     component, structurally identical to Followed Topics' `#sidebar-tags`,
+//     except the real anchor here is `#sidebar-users` (not `#sidebar-friends`
+//     as previously assumed) and it DOES expose `aria-expanded`.
+//     `page.locator('a', { hasText: 'Friends' })` (an earlier guess) is NOT
+//     unique — it also matches two unrelated `<a href="/friends"
+//     class="dropdown-item">` menu items elsewhere on the page. `navToggle()`
+//     now targets `a[href="#sidebar-users"]` directly.
+//   - CONFIRMED: the empty-state text is exactly "No friends yet".
+//   - CONFIRMED: "See all" is a `link` role with exact accessible name
+//     "See all" (no icon-name pollution on this one).
+//   - STILL UNCONFIRMED: friend-row / avatar / nickname markup inside the
+//     populated dropdown — no live snapshot of a populated, expanded
+//     dropdown has been captured yet (Codegen runs so far went straight from
+//     opening the dropdown to clicking "See all", without inspecting the
+//     row markup itself).
 //
 // SEEDING: the doc calls for seeding friendships via API in `beforeEach`,
 // but no such endpoint/helper exists in this repo yet. Steps that need a
 // specific friend count instead read the dropdown's current state and skip
 // with a clear reason if the precondition isn't met, rather than asserting
-// against a hardcoded count. Steps 7/8 (friend appears/disappears after an
+// against a hardcoded count. As of the last live check, the default test
+// account (prempoudel_1) has zero friends, so Step 6 (empty state) is
+// expected to run for real and Steps 3/4 (populated state) are expected to
+// skip until a friend exists. Steps 7/8 (friend appears/disappears after an
 // external action) are left as documented manual preconditions since there's
 // no API or second account wired up to drive them.
 // ============================================================================
@@ -54,36 +68,52 @@ async function login(page: Page) {
   await expect(page).toHaveURL(`${BASE_URL}/trending`);
 }
 
-// Doc's guess: `nav[aria-label="Primary"] >> button:has-text("Friends")` or
-// `[data-testid="nav-friends"]`. UNCONFIRMED — used as-is pending a live run.
+// CONFIRMED via a real staging test run's error output (strict-mode
+// violation dump): the toggle is
+// `<a href="#sidebar-users" aria-expanded="false" data-bs-toggle="collapse"
+//   class="nav-link dropdown-toggle collapsed">` — a Bootstrap collapse
+// component, same pattern as Followed Topics' `#sidebar-tags`, except this
+// one's real anchor is `#sidebar-users` (not `#sidebar-friends` as
+// previously assumed) and it DOES expose `aria-expanded`.
+// `page.locator('a', { hasText: 'Friends' })` is NOT unique — it also
+// matched two unrelated `<a href="/friends" class="dropdown-item">` menu
+// items elsewhere on the page, which is exactly what broke on the first
+// live run (strict mode violation, 3 matches). Target the toggle directly.
 function navToggle(page: Page): Locator {
-  return page.locator('[data-testid="nav-friends"]')
-    .or(page.locator('nav[aria-label="Primary"] >> button:has-text("Friends")'));
+  return page.locator('a[href="#sidebar-users"]');
 }
 
-// Doc's guess: `[data-testid="friends-dropdown"]`. UNCONFIRMED.
-function dropdown(page: Page): Locator {
+// CONFIRMED: resolves to the same #sidebar-users Bootstrap collapse panel
+// via the toggle's own href (kept dynamic rather than hardcoding "#sidebar-
+// users" a second time, in case the id ever changes).
+async function dropdown(page: Page): Promise<Locator> {
+  const href = await navToggle(page).getAttribute('href');
+  if (href && href.startsWith('#')) {
+    return page.locator(href);
+  }
   return page.locator('[data-testid="friends-dropdown"]');
 }
 
 async function expandDropdown(page: Page) {
   await navToggle(page).click();
   await expect(navToggle(page)).toHaveAttribute('aria-expanded', 'true');
-  await expect(dropdown(page)).toBeVisible();
+  await expect(await dropdown(page)).toBeVisible();
 }
 
 async function collapseDropdown(page: Page) {
   await navToggle(page).click();
   await expect(navToggle(page)).toHaveAttribute('aria-expanded', 'false');
-  await expect(dropdown(page)).not.toBeVisible();
+  await expect(await dropdown(page)).not.toBeVisible();
 }
 
-function friendRows(page: Page): Locator {
-  return dropdown(page).locator('a[href^="/user/"]');
+function friendRows(list: Locator): Locator {
+  return list.locator('a[href^="/user/"]');
 }
 
-function seeAllLink(page: Page): Locator {
-  return dropdown(page).getByText('See all');
+// CONFIRMED via a live Codegen recording: "See all" is a `link` role with
+// exact accessible name "See all" (no icon-name pollution on this one).
+function seeAllLink(list: Locator): Locator {
+  return list.getByRole('link', { name: 'See all', exact: true });
 }
 
 // -------------------- Suite --------------------
@@ -107,24 +137,27 @@ test.describe('Left Nav — Friends Dropdown — Positive Flow', () => {
 
   test('Step 3: Populated dropdown lists friends (avatar + nickname) and the See all link', async ({ page }) => {
     await expandDropdown(page);
+    const list = await dropdown(page);
 
-    const rows = friendRows(page);
+    const rows = friendRows(list);
     const count = await rows.count();
     test.skip(count === 0, 'Test account currently has zero friends — see Step 6 for the empty-state case.');
 
     await expect(rows.first()).toBeVisible();
-    await expect(dropdown(page).locator('[data-testid="friend-avatar"]').first()).toBeVisible();
-    await expect(dropdown(page).locator('[data-testid="friend-nickname"]').first()).toBeVisible();
-    await expect(seeAllLink(page)).toBeVisible();
+    await expect(list.locator('[data-testid="friend-avatar"]').first()).toBeVisible();
+    await expect(list.locator('[data-testid="friend-nickname"]').first()).toBeVisible();
+    await expect(seeAllLink(list)).toBeVisible();
   });
 
   test('Step 4: Clicking a friend row opens that friend\'s profile', async ({ page }) => {
     await expandDropdown(page);
+    const list = await dropdown(page);
 
-    const firstFriend = friendRows(page).first();
-    const count = await friendRows(page).count();
+    const rows = friendRows(list);
+    const count = await rows.count();
     test.skip(count === 0, 'Test account currently has zero friends — nothing to click through.');
 
+    const firstFriend = rows.first();
     const href = await firstFriend.getAttribute('href');
     await firstFriend.click();
 
@@ -134,21 +167,25 @@ test.describe('Left Nav — Friends Dropdown — Positive Flow', () => {
 
   test('Step 5: Clicking "See all" navigates to /friends', async ({ page }) => {
     await expandDropdown(page);
+    const list = await dropdown(page);
 
-    await seeAllLink(page).click();
+    await seeAllLink(list).click();
 
     await expect(page).toHaveURL(`${BASE_URL}/friends`);
   });
 
   test('Step 6: Empty state shows "No friends yet" and the See all link when zero friends', async ({ page }) => {
     await expandDropdown(page);
+    const list = await dropdown(page);
 
-    const count = await friendRows(page).count();
+    const rows = friendRows(list);
+    const count = await rows.count();
     test.skip(count > 0, 'Test account currently has friends — empty state needs a zero-friends account (auth/no-friends.json per the doc).');
 
-    await expect(dropdown(page).getByText(/no friends yet/i)).toBeVisible();
-    await expect(seeAllLink(page)).toBeVisible();
-    await expect(friendRows(page)).toHaveCount(0);
+    // CONFIRMED exact copy via live recording: "No friends yet".
+    await expect(list.getByText('No friends yet')).toBeVisible();
+    await expect(seeAllLink(list)).toBeVisible();
+    await expect(rows).toHaveCount(0);
   });
 
   test('Step 7: A friend accepted elsewhere appears in the dropdown', async ({ page }) => {
@@ -159,7 +196,8 @@ test.describe('Left Nav — Friends Dropdown — Positive Flow', () => {
     test.fixme(true, 'Needs friend-request seeding (API or second account) — not wired up yet.');
 
     await expandDropdown(page);
-    await expect(friendRows(page)).not.toHaveCount(0);
+    const list = await dropdown(page);
+    await expect(friendRows(list)).not.toHaveCount(0);
   });
 
   test('Step 8: Unfriending elsewhere removes the friend from the dropdown', async ({ page }) => {
