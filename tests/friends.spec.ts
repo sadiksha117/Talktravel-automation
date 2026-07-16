@@ -34,11 +34,15 @@
 //   - CONFIRMED: the empty-state text is exactly "No friends yet".
 //   - CONFIRMED: "See all" is a `link` role with exact accessible name
 //     "See all" (no icon-name pollution on this one).
-//   - STILL UNCONFIRMED: friend-row / avatar / nickname markup inside the
-//     populated dropdown — no live snapshot of a populated, expanded
-//     dropdown has been captured yet (Codegen runs so far went straight from
-//     opening the dropdown to clicking "See all", without inspecting the
-//     row markup itself).
+//   - CONFIRMED: a friend row is `getByRole('link', { name: '<username>' })`
+//     — the link's accessible name IS the username/nickname, no icon-name
+//     pollution (unlike the nav toggle). No separate avatar/nickname
+//     elements were found, so the doc's `data-testid="friend-avatar"` /
+//     `"friend-nickname"` guesses are almost certainly wrong.
+//   - STILL UNCONFIRMED: whether the friend's profile shows a "Friends"
+//     button once already connected (Step 4's post-click assertion).
+//     UserProfileView.ts confirms the NOT-yet-friend state's button is
+//     `/add friend/i`, but the already-friends label hasn't been captured.
 //
 // SEEDING: the doc calls for seeding friendships via API in `beforeEach`,
 // but no such endpoint/helper exists in this repo yet. Steps that need a
@@ -116,8 +120,16 @@ async function collapseDropdown(page: Page) {
   await expect(list).not.toHaveClass(/\bshow\b/);
 }
 
+// CONFIRMED via a live Codegen recording: a friend row resolves to
+// `getByRole('link', { name: '<username>' })` — the link's accessible name
+// is exactly the friend's username, with no icon-name pollution (unlike the
+// nav toggle). No separate avatar/nickname elements were found, so the doc's
+// `data-testid="friend-avatar"`/`"friend-nickname"` guesses are almost
+// certainly wrong — the row IS the link, and its visible text IS the
+// nickname. Selecting every link except "See all" identifies the friend rows
+// without needing to know usernames in advance.
 function friendRows(list: Locator): Locator {
-  return list.locator('a[href^="/user/"]');
+  return list.getByRole('link').filter({ hasNotText: 'See all' });
 }
 
 // CONFIRMED via a live Codegen recording: "See all" is a `link` role with
@@ -153,9 +165,10 @@ test.describe('Left Nav — Friends Dropdown — Positive Flow', () => {
     const count = await rows.count();
     test.skip(count === 0, 'Test account currently has zero friends — see Step 6 for the empty-state case.');
 
+    // Each row's accessible name IS the nickname (confirmed: e.g. "Test12789").
+    const firstRowName = await rows.first().textContent();
+    expect(firstRowName?.trim().length).toBeGreaterThan(0);
     await expect(rows.first()).toBeVisible();
-    await expect(list.locator('[data-testid="friend-avatar"]').first()).toBeVisible();
-    await expect(list.locator('[data-testid="friend-nickname"]').first()).toBeVisible();
     await expect(seeAllLink(list)).toBeVisible();
   });
 
@@ -172,6 +185,10 @@ test.describe('Left Nav — Friends Dropdown — Positive Flow', () => {
     await firstFriend.click();
 
     await expect(page).toHaveURL(`${BASE_URL}${href}`);
+    // UNCONFIRMED: the doc assumes the profile shows a "Friends" button once
+    // already connected. UserProfileView.ts confirms the NOT-yet-friend state
+    // is `/add friend/i` (see addFriendBtn), but the already-friends label
+    // has not been captured live yet.
     await expect(page.getByRole('button', { name: 'Friends' })).toBeVisible();
   });
 
